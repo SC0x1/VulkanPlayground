@@ -1,0 +1,32 @@
+[submodule "Externals/fmt"]
+    path = Externals/fmt
+    url = https://github.com/fmtlib/fmt
+    branch = master
+
+[submodule "Externals/bstrlib"]
+    path = Externals/bstrlib
+    url = https://github.com/websnarf/bstrlib
+
+[submodule "Externals/glm"]
+    path = Externals/glm
+    url = https://github.com/g-truc/glm
+
+[submodule "Externals/glfw"]
+    path = Externals/glfw
+    url = https://github.com/glfw/glfw
+
+[submodule "Externals/imgui"]
+    path = Externals/imgui
+    url = https://github.com/ocornut/imgui
+
+[submodule "Externals/stblib"]
+    path = Externals/stblib
+    url = https://github.com/nothings/stb
+
+[submodule "Externals/turf"]
+    path = Externals/turf
+    url = https://github.com/preshing/turf
+
+[submodule "Externals/assimp"]
+    path = Externals/assimp
+    url = https://github.com/assimp/assimp
