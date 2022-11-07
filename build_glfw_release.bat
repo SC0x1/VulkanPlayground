@@ -1,4 +1,4 @@
-rem @echo off
+@echo off
 cls
 
 set rootDir=%~dp0%
@@ -10,6 +10,8 @@ cmake -S %srcPath% -B %solutionDir%
 set vswhereDir=C:\Program Files (x86)\Microsoft Visual Studio\Installer
 cd /d %vswhereDir%
 echo  %vswhereDir%
+
+setlocal enabledelayedexpansion
 
 rem https://github.com/microsoft/vswhere
 for /f "usebackq tokens=*" %%i in (`vswhere.exe -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do (

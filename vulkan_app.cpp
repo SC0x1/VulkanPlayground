@@ -70,6 +70,7 @@ void HelloTriangleApplication::InitVulkan()
     CreateInstance();
     SetupDebugMessenger();
     PickPhysicalDevice();
+    CreateLogicalDevice();
 }
 
 void HelloTriangleApplication::MainLoop()
@@ -84,6 +85,8 @@ void HelloTriangleApplication::Cleanup()
 {
     //Vulkan
     {
+        vkDestroyDevice(m_Device, nullptr);
+
         if (m_EnableValidationLayers)
         {
             DestroyDebugUtilsMessengerEXT(m_Instance, m_DebugMessenger, nullptr);
@@ -219,6 +222,54 @@ void HelloTriangleApplication::PickPhysicalDevice()
     }
 }
 
+void HelloTriangleApplication::CreateLogicalDevice()
+{
+    QueueFamilyIndices indices = findQueueFamilies(m_PhysicalDevice);
+
+    VkDeviceQueueCreateInfo queueCreateInfo{};
+    queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    queueCreateInfo.queueFamilyIndex = indices.graphicsFamily.value();
+    queueCreateInfo.queueCount = 1;
+    float queuePriority = 1.0f;
+    queueCreateInfo.pQueuePriorities = &queuePriority;
+
+    VkPhysicalDeviceFeatures deviceFeatures{};
+
+    VkDeviceCreateInfo createInfo{};
+    createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+
+    createInfo.pQueueCreateInfos = &queueCreateInfo;
+    createInfo.queueCreateInfoCount = 1;
+
+    createInfo.pEnabledFeatures = &deviceFeatures;
+
+    createInfo.enabledExtensionCount = 0;
+
+    /*
+        Previous implementations of Vulkan made a distinction between instance and device specific validation layers,
+        but this is no longer the case. That means that the enabledLayerCount and ppEnabledLayerNames fields
+        of VkDeviceCreateInfo are ignored by up-to-date implementations.
+        However, it is still a good idea to set them anyway to be compatible with older implementations.
+    */
+    if (m_EnableValidationLayers)
+    {
+        createInfo.enabledLayerCount = static_cast<uint32_t>(m_ValidationLayers.size());
+        createInfo.ppEnabledLayerNames = m_ValidationLayers.data();
+    }
+    else
+    {
+        createInfo.enabledLayerCount = 0;
+    }
+
+    // The queues are automatically created along with the logical device
+    if (vkCreateDevice(m_PhysicalDevice, &createInfo, nullptr, &m_Device) != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to create logical device!");
+    }
+
+    vkGetDeviceQueue(m_Device, indices.graphicsFamily.value(), 0, &m_GraphicsQueue);
+}
+
 bool HelloTriangleApplication::CheckValidationLayerSupport()
 {
     uint32_t layerCount;
@@ -283,7 +334,7 @@ QueueFamilyIndices HelloTriangleApplication::findQueueFamilies(VkPhysicalDevice 
             indices.graphicsFamily = i;
         }
 
-        if (indices.isComplete())
+        if (indices.IsComplete())
         {
             break;
         }
@@ -300,7 +351,7 @@ int HelloTriangleApplication::RateDeviceSuitability(VkPhysicalDevice device)
     // Checks the necessary queue family
     QueueFamilyIndices indices = findQueueFamilies(device);
 
-    if (indices.isComplete() == false)
+    if (indices.IsComplete() == false)
     {
         return 0;
     }

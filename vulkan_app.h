@@ -21,7 +21,7 @@ struct QueueFamilyIndices
 {
     std::optional<uint32_t> graphicsFamily;
 
-    bool isComplete()
+    bool IsComplete()
     {
         return graphicsFamily.has_value();
     }
@@ -48,6 +48,7 @@ private:
 
     void SetupDebugMessenger();
     void PickPhysicalDevice();
+    void CreateLogicalDevice();
     bool CheckValidationLayerSupport();
 
     std::vector<const char*> GetRequiredExtensions();
@@ -59,9 +60,12 @@ private:
     const uint32_t HEIGHT = 600;
     GLFWwindow* m_Window = nullptr;
 
-    VkInstance m_Instance;
+    VkInstance m_Instance; 
+
     VkDebugUtilsMessengerEXT m_DebugMessenger;
-    VkPhysicalDevice m_PhysicalDevice = VK_NULL_HANDLE;
+    VkPhysicalDevice m_PhysicalDevice = VK_NULL_HANDLE; // A Physical device
+    VkDevice m_Device;                                  // A Logical device
+    VkQueue m_GraphicsQueue;                            // Device queues are implicitly cleaned up when the device is destroyed
 
     const std::vector<const char*> m_ValidationLayers =
     {
