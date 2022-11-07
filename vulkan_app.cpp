@@ -1,5 +1,7 @@
 #include "vulkan_app.h"
 
+#include <map>
+
 /*
     https://vulkan-tutorial.com/
 */
@@ -67,6 +69,7 @@ void HelloTriangleApplication::InitVulkan()
 {
     CreateInstance();
     SetupDebugMessenger();
+    PickPhysicalDevice();
 }
 
 void HelloTriangleApplication::MainLoop()
@@ -104,8 +107,6 @@ void HelloTriangleApplication::InitWindow()
     m_Window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
 }
 
-    //////////////////////////////////////////////////////////////////////////
-    /// Vulkan
 void HelloTriangleApplication::CreateInstance()
 {
     if (m_EnableValidationLayers && !CheckValidationLayerSupport())
@@ -180,6 +181,44 @@ void HelloTriangleApplication::SetupDebugMessenger()
     }
 }
 
+void HelloTriangleApplication::PickPhysicalDevice()
+{
+    uint32_t deviceCount = 0;
+    vkEnumeratePhysicalDevices(m_Instance, &deviceCount, nullptr);
+    if (deviceCount == 0)
+    {
+        throw std::runtime_error("failed to find GPUs with Vulkan support!");
+    }
+
+    std::vector<VkPhysicalDevice> devices(deviceCount);
+    vkEnumeratePhysicalDevices(m_Instance, &deviceCount, devices.data());
+
+    // Use an ordered map to automatically sort candidates by increasing score
+    std::multimap<int, VkPhysicalDevice> candidates;
+
+    for (const auto& device : devices)
+    {
+        int score = RateDeviceSuitability(device);
+        candidates.insert(std::make_pair(score, device));
+    }
+
+
+    // Check if the best candidate is suitable at all
+    if (candidates.rbegin()->first > 0)
+    {
+        m_PhysicalDevice = candidates.rbegin()->second;
+    }
+    else
+    {
+        throw std::runtime_error("failed to find a suitable GPU!");
+    }
+
+    if (m_PhysicalDevice == VK_NULL_HANDLE)
+    {
+        throw std::runtime_error("failed to find a suitable GPU!");
+    }
+}
+
 bool HelloTriangleApplication::CheckValidationLayerSupport()
 {
     uint32_t layerCount;
@@ -224,4 +263,71 @@ std::vector<const char*> HelloTriangleApplication::GetRequiredExtensions()
     }
 
     return extensions;
+}
+
+QueueFamilyIndices HelloTriangleApplication::findQueueFamilies(VkPhysicalDevice device)
+{
+    QueueFamilyIndices indices;
+    // Assign index to queue families that could be found
+    uint32_t queueFamilyCount = 0;
+    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
+
+    std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
+
+    int i = 0;
+    for (const auto& queueFamily : queueFamilies)
+    {
+        if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+        {
+            indices.graphicsFamily = i;
+        }
+
+        if (indices.isComplete())
+        {
+            break;
+        }
+
+        i++;
+    }
+
+    return indices;
+}
+
+int HelloTriangleApplication::RateDeviceSuitability(VkPhysicalDevice device)
+{
+    int score = 0;
+    // Checks the necessary queue family
+    QueueFamilyIndices indices = findQueueFamilies(device);
+
+    if (indices.isComplete() == false)
+    {
+        return 0;
+    }
+
+    // Basic device properties like the name, type and supported Vulkan version
+    VkPhysicalDeviceProperties deviceProperties;
+    vkGetPhysicalDeviceProperties(device, &deviceProperties);
+
+    // The support for optional features like texture compression,
+    // 64 bit floats and multi viewport rendering (useful for VR)
+    VkPhysicalDeviceFeatures deviceFeatures;
+    vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
+
+    // Discrete GPUs have a significant performance advantage
+    if (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
+    {
+        score += 1000;
+    }
+
+    // Maximum possible size of textures affects graphics quality
+    score += deviceProperties.limits.maxImageDimension2D;
+
+    // Application can't function without geometry shaders
+    if (!deviceFeatures.geometryShader)
+    {
+        return 0;
+    }
+
+    return score;
 }

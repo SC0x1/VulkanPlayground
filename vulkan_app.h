@@ -9,12 +9,23 @@
 #include <cstring>
 #include <iostream>
 #include <vector>
+#include <optional>
 
 #include <vulkan/vulkan.h>
 
 /*
     https://vulkan-tutorial.com/
 */
+
+struct QueueFamilyIndices
+{
+    std::optional<uint32_t> graphicsFamily;
+
+    bool isComplete()
+    {
+        return graphicsFamily.has_value();
+    }
+};
 
 class HelloTriangleApplication
 {
@@ -36,10 +47,12 @@ private:
     void CreateInstance();
 
     void SetupDebugMessenger();
-
+    void PickPhysicalDevice();
     bool CheckValidationLayerSupport();
 
     std::vector<const char*> GetRequiredExtensions();
+
+    int RateDeviceSuitability(VkPhysicalDevice device);
 
 private:
     const uint32_t WIDTH = 800;
@@ -48,11 +61,14 @@ private:
 
     VkInstance m_Instance;
     VkDebugUtilsMessengerEXT m_DebugMessenger;
+    VkPhysicalDevice m_PhysicalDevice = VK_NULL_HANDLE;
 
     const std::vector<const char*> m_ValidationLayers =
     {
         "VK_LAYER_KHRONOS_validation"
     };
+
+    QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
 
 #ifdef NDEBUG
     const bool m_EnableValidationLayers = false;
