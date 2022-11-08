@@ -1,5 +1,8 @@
+#define VK_USE_PLATFORM_WIN32_KHR
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
+#define GLFW_EXPOSE_NATIVE_WIN32
+#include <GLFW/glfw3native.h>
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -10,6 +13,8 @@
 #include <iostream>
 #include <vector>
 #include <optional>
+#include <map>
+#include <set>
 
 #include <vulkan/vulkan.h>
 
@@ -20,10 +25,11 @@
 struct QueueFamilyIndices
 {
     std::optional<uint32_t> graphicsFamily;
+    std::optional<uint32_t> presentFamily;
 
     bool IsComplete()
     {
-        return graphicsFamily.has_value();
+        return graphicsFamily.has_value() && presentFamily.has_value();
     }
 };
 
@@ -45,6 +51,7 @@ private:
     //////////////////////////////////////////////////////////////////////////
     /// Vulkan
     void CreateInstance();
+    void CreateSurface();
 
     void SetupDebugMessenger();
     void PickPhysicalDevice();
@@ -63,16 +70,18 @@ private:
     VkInstance m_Instance; 
 
     VkDebugUtilsMessengerEXT m_DebugMessenger;
+    VkSurfaceKHR m_Surface;
     VkPhysicalDevice m_PhysicalDevice = VK_NULL_HANDLE; // A Physical device
     VkDevice m_Device;                                  // A Logical device
     VkQueue m_GraphicsQueue;                            // Device queues are implicitly cleaned up when the device is destroyed
+    VkQueue m_PresentQueue;
 
     const std::vector<const char*> m_ValidationLayers =
     {
         "VK_LAYER_KHRONOS_validation"
     };
 
-    QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
+    QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device);
 
 #ifdef NDEBUG
     const bool m_EnableValidationLayers = false;

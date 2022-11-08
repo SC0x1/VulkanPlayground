@@ -69,6 +69,7 @@ void HelloTriangleApplication::InitVulkan()
 {
     CreateInstance();
     SetupDebugMessenger();
+    CreateSurface();
     PickPhysicalDevice();
     CreateLogicalDevice();
 }
@@ -92,6 +93,7 @@ void HelloTriangleApplication::Cleanup()
             DestroyDebugUtilsMessengerEXT(m_Instance, m_DebugMessenger, nullptr);
         }
 
+        vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr);
         vkDestroyInstance(m_Instance, nullptr);
     }
 
@@ -168,6 +170,27 @@ void HelloTriangleApplication::CreateInstance()
     }
 }
 
+void HelloTriangleApplication::CreateSurface()
+{
+    // Platform specific creation of the surface
+    /* 
+        VkWin32SurfaceCreateInfoKHR createInfo{};
+        createInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
+        createInfo.hwnd = glfwGetWin32Window(m_Window);
+        createInfo.hinstance = GetModuleHandle(nullptr);
+
+        if (vkCreateWin32SurfaceKHR(m_Instance, &createInfo, nullptr, &m_Surface) != VK_SUCCESS)
+        {
+            throw std::runtime_error("failed to create window surface!");
+        }
+    */
+
+    if (glfwCreateWindowSurface(m_Instance, m_Window, nullptr, &m_Surface) != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to create window surface!");
+    }
+}
+
 void HelloTriangleApplication::SetupDebugMessenger()
 {
     if (!m_EnableValidationLayers)
@@ -224,22 +247,31 @@ void HelloTriangleApplication::PickPhysicalDevice()
 
 void HelloTriangleApplication::CreateLogicalDevice()
 {
-    QueueFamilyIndices indices = findQueueFamilies(m_PhysicalDevice);
+    QueueFamilyIndices indices = FindQueueFamilies(m_PhysicalDevice);
 
-    VkDeviceQueueCreateInfo queueCreateInfo{};
-    queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-    queueCreateInfo.queueFamilyIndex = indices.graphicsFamily.value();
-    queueCreateInfo.queueCount = 1;
+    std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
+    std::set<uint32_t> uniqueQueueFamilies = { indices.graphicsFamily.value(), indices.presentFamily.value() };
+
     float queuePriority = 1.0f;
-    queueCreateInfo.pQueuePriorities = &queuePriority;
+    for (uint32_t queueFamily : uniqueQueueFamilies)
+    {
+        VkDeviceQueueCreateInfo queueCreateInfo{};
+        queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        queueCreateInfo.queueFamilyIndex = queueFamily;
+        queueCreateInfo.queueCount = 1;
+        queueCreateInfo.pQueuePriorities = &queuePriority;
+
+        queueCreateInfos.push_back(queueCreateInfo);
+    }
 
     VkPhysicalDeviceFeatures deviceFeatures{};
 
     VkDeviceCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 
-    createInfo.pQueueCreateInfos = &queueCreateInfo;
-    createInfo.queueCreateInfoCount = 1;
+    createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());;
+    createInfo.pQueueCreateInfos = queueCreateInfos.data();
+
 
     createInfo.pEnabledFeatures = &deviceFeatures;
 
@@ -268,6 +300,7 @@ void HelloTriangleApplication::CreateLogicalDevice()
     }
 
     vkGetDeviceQueue(m_Device, indices.graphicsFamily.value(), 0, &m_GraphicsQueue);
+    vkGetDeviceQueue(m_Device, indices.presentFamily.value(), 0, &m_PresentQueue);
 }
 
 bool HelloTriangleApplication::CheckValidationLayerSupport()
@@ -316,13 +349,12 @@ std::vector<const char*> HelloTriangleApplication::GetRequiredExtensions()
     return extensions;
 }
 
-QueueFamilyIndices HelloTriangleApplication::findQueueFamilies(VkPhysicalDevice device)
+QueueFamilyIndices HelloTriangleApplication::FindQueueFamilies(VkPhysicalDevice device)
 {
     QueueFamilyIndices indices;
     // Assign index to queue families that could be found
     uint32_t queueFamilyCount = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
-
     std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
     vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
 
@@ -332,6 +364,13 @@ QueueFamilyIndices HelloTriangleApplication::findQueueFamilies(VkPhysicalDevice 
         if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
         {
             indices.graphicsFamily = i;
+        }
+
+        VkBool32 presentSupport = false;
+        vkGetPhysicalDeviceSurfaceSupportKHR(device, i, m_Surface, &presentSupport);
+        if (presentSupport)
+        {
+            indices.presentFamily = i;
         }
 
         if (indices.IsComplete())
@@ -349,7 +388,7 @@ int HelloTriangleApplication::RateDeviceSuitability(VkPhysicalDevice device)
 {
     int score = 0;
     // Checks the necessary queue family
-    QueueFamilyIndices indices = findQueueFamilies(device);
+    QueueFamilyIndices indices = FindQueueFamilies(device);
 
     if (indices.IsComplete() == false)
     {
