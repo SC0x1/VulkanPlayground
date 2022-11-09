@@ -72,6 +72,7 @@ void HelloTriangleApplication::InitVulkan()
     CreateSurface();
     PickPhysicalDevice();
     CreateLogicalDevice();
+    CreateSwapChain();
 }
 
 void HelloTriangleApplication::MainLoop()
@@ -86,6 +87,8 @@ void HelloTriangleApplication::Cleanup()
 {
     //Vulkan
     {
+        vkDestroySwapchainKHR(m_Device, m_SwapChain, nullptr);
+
         vkDestroyDevice(m_Device, nullptr);
 
         if (m_EnableValidationLayers)
@@ -275,8 +278,8 @@ void HelloTriangleApplication::CreateLogicalDevice()
 
     createInfo.pEnabledFeatures = &deviceFeatures;
 
-    createInfo.enabledExtensionCount = 0;
-
+    createInfo.enabledExtensionCount = static_cast<uint32_t>(m_DeviceExtensions.size());
+    createInfo.ppEnabledExtensionNames = m_DeviceExtensions.data();
     /*
         Previous implementations of Vulkan made a distinction between instance and device specific validation layers,
         but this is no longer the case. That means that the enabledLayerCount and ppEnabledLayerNames fields
@@ -301,6 +304,103 @@ void HelloTriangleApplication::CreateLogicalDevice()
 
     vkGetDeviceQueue(m_Device, indices.graphicsFamily.value(), 0, &m_GraphicsQueue);
     vkGetDeviceQueue(m_Device, indices.presentFamily.value(), 0, &m_PresentQueue);
+}
+
+void HelloTriangleApplication::CreateSwapChain()
+{
+    const SwapChainSupportDetails swapChainSupport = QuerySwapChainSupport(m_PhysicalDevice);
+
+    const VkSurfaceFormatKHR surfaceFormat = ChooseSwapSurfaceFormat(swapChainSupport.formats);
+    const VkPresentModeKHR presentMode = ChooseSwapPresentMode(swapChainSupport.presentModes);
+    const VkExtent2D extent = ChooseSwapExtent(swapChainSupport.capabilities);
+
+    /*
+        Simply sticking to this minimum means that we may sometimes have to wait on
+        the driver to complete internal operations before we can acquire another image to render to.
+        Therefore it is recommended to request at least one more image than the minimum
+    */
+    uint32_t imageCount = swapChainSupport.capabilities.minImageCount + 1;
+
+    /*
+        We should also make sure to not exceed the maximum number of images while doing this,
+        where 0 is a special value that means that there is no maximum
+    */
+    if (swapChainSupport.capabilities.maxImageCount > 0 && imageCount > swapChainSupport.capabilities.maxImageCount)
+    {
+        imageCount = swapChainSupport.capabilities.maxImageCount;
+    }
+
+    /*
+        The imageArrayLayers specifies the amount of layers each image consists of.
+        This is always 1 unless you are developing a stereoscopic 3D application
+    */
+    VkSwapchainCreateInfoKHR createInfo{};
+    createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+    createInfo.surface = m_Surface;
+    createInfo.minImageCount = imageCount;
+    createInfo.imageFormat = surfaceFormat.format;
+    createInfo.imageColorSpace = surfaceFormat.colorSpace;
+    createInfo.imageExtent = extent;
+    createInfo.imageArrayLayers = 1;
+    createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    
+    const QueueFamilyIndices indices = FindQueueFamilies(m_PhysicalDevice);
+    const uint32_t queueFamilyIndices[] = { indices.graphicsFamily.value(), indices.presentFamily.value() };
+
+    if (indices.graphicsFamily != indices.presentFamily)
+    {
+        // VK_SHARING_MODE_CONCURRENT
+        // Images can be used across multiple queue families without explicit ownership transfers.
+        createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+        createInfo.queueFamilyIndexCount = 2;
+        createInfo.pQueueFamilyIndices = queueFamilyIndices;
+    }
+    else
+    {
+        /*
+            VK_SHARING_MODE_EXCLUSIVE
+            An image is owned by one queue family at a time and ownership must be explicitly
+            transferred before using it in another queue family. This option offers the best performance.
+        */
+        createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        createInfo.queueFamilyIndexCount = 0; // Optional
+        createInfo.pQueueFamilyIndices = nullptr; // Optional
+    }
+
+    // We can specify that a certain transform should be applied to images in the swap chain if it is supported
+    // (supportedTransforms in capabilities), like a 90 degree clockwise rotation or horizontal flip
+    createInfo.preTransform = swapChainSupport.capabilities.currentTransform;
+
+    // The compositeAlpha field specifies if the alpha channel should be used for blending with other windows in the window system. 
+    // You'll almost always want to simply ignore the alpha channel
+    createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+
+    createInfo.presentMode = presentMode;
+    /*
+        If the clipped member is set to VK_TRUE then that means that we don't care about the color
+        of pixels that are obscured, for example because another window is in front of them.
+        Unless you really need to be able to read these pixels back and get predictable results,
+        you'll get the best performance by enabling clipping
+    */
+    createInfo.clipped = VK_TRUE;
+
+    createInfo.oldSwapchain = VK_NULL_HANDLE;
+
+    if (vkCreateSwapchainKHR(m_Device, &createInfo, nullptr, &m_SwapChain) != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to create swap chain!");
+    }
+
+    vkGetSwapchainImagesKHR(m_Device, m_SwapChain, &imageCount, nullptr);
+    m_SwapChainImages.resize(imageCount);
+    vkGetSwapchainImagesKHR(m_Device, m_SwapChain, &imageCount, m_SwapChainImages.data());
+
+    m_SwapChainImageFormat = surfaceFormat.format;
+    m_SwapChainExtent = extent;
+
+    /*
+        We now have a set of images that can be drawn onto and can be presented to the window
+    */
 }
 
 bool HelloTriangleApplication::CheckValidationLayerSupport()
@@ -333,6 +433,51 @@ bool HelloTriangleApplication::CheckValidationLayerSupport()
     return true;
 }
 
+bool HelloTriangleApplication::CheckDeviceExtensionSupport(VkPhysicalDevice device)
+{
+    uint32_t extensionCount;
+    vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
+
+    std::vector<VkExtensionProperties> availableExtensions(extensionCount);
+    vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, availableExtensions.data());
+
+    std::set<std::string> requiredExtensions(m_DeviceExtensions.begin(), m_DeviceExtensions.end());
+
+    for (const auto& extension : availableExtensions)
+    {
+        requiredExtensions.erase(extension.extensionName);
+    }
+
+    return requiredExtensions.empty();
+}
+
+SwapChainSupportDetails HelloTriangleApplication::QuerySwapChainSupport(VkPhysicalDevice device)
+{
+    SwapChainSupportDetails details;
+
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, m_Surface, &details.capabilities);
+
+    uint32_t formatCount;
+    vkGetPhysicalDeviceSurfaceFormatsKHR(device, m_Surface, &formatCount, nullptr);
+
+    if (formatCount != 0)
+    {
+        details.formats.resize(formatCount);
+        vkGetPhysicalDeviceSurfaceFormatsKHR(device, m_Surface, &formatCount, details.formats.data());
+    }
+
+    uint32_t presentModeCount;
+    vkGetPhysicalDeviceSurfacePresentModesKHR(device, m_Surface, &presentModeCount, nullptr);
+
+    if (presentModeCount != 0)
+    {
+        details.presentModes.resize(presentModeCount);
+        vkGetPhysicalDeviceSurfacePresentModesKHR(device, m_Surface, &presentModeCount, details.presentModes.data());
+    }
+
+    return details;
+}
+
 std::vector<const char*> HelloTriangleApplication::GetRequiredExtensions()
 {
     uint32_t glfwExtensionCount = 0;
@@ -347,6 +492,62 @@ std::vector<const char*> HelloTriangleApplication::GetRequiredExtensions()
     }
 
     return extensions;
+}
+
+VkSurfaceFormatKHR HelloTriangleApplication::ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats)
+{
+    for (const auto& availableFormat : availableFormats)
+    {
+        if (availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB &&
+            availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+        {
+            return availableFormat;
+        }
+    }
+
+    return availableFormats[0];
+}
+
+VkPresentModeKHR HelloTriangleApplication::ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes)
+{
+    // VK_PRESENT_MODE_MAILBOX_KHR is a very nice trade-off if energy usage is not a concern
+    /*
+        It allows us to avoid tearing while still maintaining a fairly low latency by rendering new images
+        that are as up-to-date as possible right until the vertical blank
+    */
+    for (const auto& availablePresentMode : availablePresentModes)
+    {
+        if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR)
+        {
+            return availablePresentMode;
+        }
+    }
+
+    return VK_PRESENT_MODE_FIFO_KHR;
+}
+
+VkExtent2D HelloTriangleApplication::ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities)
+{
+    if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max())
+    {
+        return capabilities.currentExtent;
+    }
+    else
+    {
+        int width, height;
+        glfwGetFramebufferSize(m_Window, &width, &height);
+
+        VkExtent2D actualExtent =
+        {
+            static_cast<uint32_t>(width),
+            static_cast<uint32_t>(height)
+        };
+
+        actualExtent.width = std::clamp(actualExtent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
+        actualExtent.height = std::clamp(actualExtent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
+
+        return actualExtent;
+    }
 }
 
 QueueFamilyIndices HelloTriangleApplication::FindQueueFamilies(VkPhysicalDevice device)
@@ -388,9 +589,24 @@ int HelloTriangleApplication::RateDeviceSuitability(VkPhysicalDevice device)
 {
     int score = 0;
     // Checks the necessary queue family
-    QueueFamilyIndices indices = FindQueueFamilies(device);
+    const QueueFamilyIndices indices = FindQueueFamilies(device);
 
     if (indices.IsComplete() == false)
+    {
+        return 0;
+    }
+
+    const bool extensionsSupported = CheckDeviceExtensionSupport(device);
+
+    if (extensionsSupported == false)
+    {
+        return 0;
+    }
+
+    bool swapChainAdequate = false;
+    const SwapChainSupportDetails swapChainSupport = QuerySwapChainSupport(device);
+    swapChainAdequate = !swapChainSupport.formats.empty() && !swapChainSupport.presentModes.empty();
+    if (swapChainAdequate == false)
     {
         return 0;
     }

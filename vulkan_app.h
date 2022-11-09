@@ -9,6 +9,10 @@
 #include <glm/vec4.hpp>
 #include <glm/mat4x4.hpp>
 
+#include <cstdint>   // Necessary for uint32_t
+#include <limits>    // Necessary for std::numeric_limits
+#include <algorithm> // Necessary for std::clamp
+
 #include <cstring>
 #include <iostream>
 #include <vector>
@@ -27,10 +31,17 @@ struct QueueFamilyIndices
     std::optional<uint32_t> graphicsFamily;
     std::optional<uint32_t> presentFamily;
 
-    bool IsComplete()
+    bool IsComplete() const
     {
         return graphicsFamily.has_value() && presentFamily.has_value();
     }
+};
+
+struct SwapChainSupportDetails
+{
+    VkSurfaceCapabilitiesKHR capabilities;
+    std::vector<VkSurfaceFormatKHR> formats;
+    std::vector<VkPresentModeKHR> presentModes;
 };
 
 class HelloTriangleApplication
@@ -56,13 +67,25 @@ private:
     void SetupDebugMessenger();
     void PickPhysicalDevice();
     void CreateLogicalDevice();
+    void CreateSwapChain();
+
     bool CheckValidationLayerSupport();
+    bool CheckDeviceExtensionSupport(VkPhysicalDevice device);
+
+    SwapChainSupportDetails QuerySwapChainSupport(VkPhysicalDevice device);
 
     std::vector<const char*> GetRequiredExtensions();
+
+    VkSurfaceFormatKHR ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
+    VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);
+    VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities);
 
     int RateDeviceSuitability(VkPhysicalDevice device);
 
 private:
+    // is measured in screen coordinates
+    // But Vulkan works with pixels
+    // glfwGetFramebufferSize to query the resolution of the window in pixel
     const uint32_t WIDTH = 800;
     const uint32_t HEIGHT = 600;
     GLFWwindow* m_Window = nullptr;
@@ -71,14 +94,26 @@ private:
 
     VkDebugUtilsMessengerEXT m_DebugMessenger;
     VkSurfaceKHR m_Surface;
+
     VkPhysicalDevice m_PhysicalDevice = VK_NULL_HANDLE; // A Physical device
     VkDevice m_Device;                                  // A Logical device
     VkQueue m_GraphicsQueue;                            // Device queues are implicitly cleaned up when the device is destroyed
     VkQueue m_PresentQueue;
 
+    // Swap chain
+    std::vector<VkImage> m_SwapChainImages;
+    VkSwapchainKHR m_SwapChain;
+    VkFormat m_SwapChainImageFormat;
+    VkExtent2D m_SwapChainExtent;
+
     const std::vector<const char*> m_ValidationLayers =
     {
         "VK_LAYER_KHRONOS_validation"
+    };
+
+    const std::vector<const char*> m_DeviceExtensions =
+    {
+        VK_KHR_SWAPCHAIN_EXTENSION_NAME
     };
 
     QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device);
