@@ -110,6 +110,8 @@ private:
     VkFormat m_SwapChainImageFormat;
     VkExtent2D m_SwapChainExtent;
 
+    VkPipelineLayout m_PipelineLayout;
+
     const std::vector<const char*> m_ValidationLayers =
     {
         "VK_LAYER_KHRONOS_validation"
