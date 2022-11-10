@@ -69,6 +69,8 @@ private:
     void CreateLogicalDevice();
     void CreateSwapChain();
     void CreateImageViews();
+    void CreateGraphicsPipeline();
+    VkShaderModule CreateShaderModule(const std::vector<char>& code);
 
     bool CheckValidationLayerSupport();
     bool CheckDeviceExtensionSupport(VkPhysicalDevice device);
