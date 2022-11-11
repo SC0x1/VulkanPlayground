@@ -74,8 +74,11 @@ private:
     void CreateFramebuffers();
     void CreateCommandPool();
     void CreateCommandBuffer();
+    void CreateSyncObjects();
 
     void RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) const;
+
+    void DrawFrame();
 
     bool CheckValidationLayerSupport() const;
     bool CheckDeviceExtensionSupport(VkPhysicalDevice device) const;
@@ -129,6 +132,10 @@ private:
 
     VkCommandPool m_CommandPool;
     VkCommandBuffer m_CommandBuffer;
+
+    VkSemaphore m_ImageAvailableSemaphore;
+    VkSemaphore m_RenderFinishedSemaphore;
+    VkFence m_InFlightFence;
 
     const std::vector<const char*> m_ValidationLayers =
     {
