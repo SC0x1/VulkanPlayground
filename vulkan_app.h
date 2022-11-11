@@ -69,6 +69,7 @@ private:
     void CreateLogicalDevice();
     void CreateSwapChain();
     void CreateImageViews();
+    void CreateRenderPass();
     void CreateGraphicsPipeline();
     VkShaderModule CreateShaderModule(const std::vector<char>& code);
 
@@ -110,6 +111,7 @@ private:
     VkFormat m_SwapChainImageFormat;
     VkExtent2D m_SwapChainExtent;
 
+    VkRenderPass m_RenderPass;
     VkPipelineLayout m_PipelineLayout;
 
     const std::vector<const char*> m_ValidationLayers =
@@ -129,4 +131,5 @@ private:
 #else
     const bool m_EnableValidationLayers = true;
 #endif
+
 };
