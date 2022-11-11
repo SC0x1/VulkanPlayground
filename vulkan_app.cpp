@@ -109,6 +109,7 @@ void HelloTriangleApplication::Cleanup()
 {
     //Vulkan
     {
+        vkDestroyPipeline(m_Device, m_GraphicsPipeline, nullptr);
         vkDestroyPipelineLayout(m_Device, m_PipelineLayout, nullptr);
         vkDestroyRenderPass(m_Device, m_RenderPass, nullptr);
 
@@ -735,6 +736,43 @@ void HelloTriangleApplication::CreateGraphicsPipeline()
     if (vkCreatePipelineLayout(m_Device, &pipelineLayoutInfo, nullptr, &m_PipelineLayout) != VK_SUCCESS)
     {
         throw std::runtime_error("failed to create pipeline layout!");
+    }
+
+    VkGraphicsPipelineCreateInfo pipelineInfo{};
+    pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    pipelineInfo.stageCount = 2;
+    pipelineInfo.pStages = shaderStages;
+
+    // Then we reference all of the structures describing the fixed-function stage.
+    pipelineInfo.pVertexInputState = &vertexInputInfo;
+    pipelineInfo.pInputAssemblyState = &inputAssembly;
+    pipelineInfo.pViewportState = &viewportState;
+    pipelineInfo.pRasterizationState = &rasterizer;
+    pipelineInfo.pMultisampleState = &multisampling;
+    pipelineInfo.pDepthStencilState = nullptr; // Optional
+    pipelineInfo.pColorBlendState = &colorBlending;
+    pipelineInfo.pDynamicState = &dynamicState;
+
+    pipelineInfo.layout = m_PipelineLayout;
+
+    pipelineInfo.renderPass = m_RenderPass;
+    pipelineInfo.subpass = 0;
+
+    pipelineInfo.basePipelineHandle = VK_NULL_HANDLE; // Optional
+    pipelineInfo.basePipelineIndex = -1; // Optional
+    /*
+    There are actually two more parameters: basePipelineHandle and basePipelineIndex.
+    Vulkan allows you to create a new graphics pipeline by deriving from an existing pipeline.
+    The idea of pipeline derivatives is that it is less expensive to set up pipelines when
+    they have much functionality in common with an existing pipeline and switching between
+    pipelines from the same parent can also be done quicker. You can either specify the handle
+    of an existing pipeline with basePipelineHandle or reference another pipeline that is about
+    to be created by index with basePipelineIndex. 
+    */
+
+    if (vkCreateGraphicsPipelines(m_Device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_GraphicsPipeline) != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to create graphics pipeline!");
     }
 
     vkDestroyShaderModule(m_Device, fragShaderModule, nullptr);

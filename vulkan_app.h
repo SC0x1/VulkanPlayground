@@ -113,6 +113,7 @@ private:
 
     VkRenderPass m_RenderPass;
     VkPipelineLayout m_PipelineLayout;
+    VkPipeline m_GraphicsPipeline;
 
     const std::vector<const char*> m_ValidationLayers =
     {
