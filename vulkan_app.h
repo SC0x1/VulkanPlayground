@@ -72,22 +72,30 @@ private:
     void CreateRenderPass();
     void CreateGraphicsPipeline();
     void CreateFramebuffers();
-    VkShaderModule CreateShaderModule(const std::vector<char>& code);
+    void CreateCommandPool();
+    void CreateCommandBuffer();
 
-    bool CheckValidationLayerSupport();
-    bool CheckDeviceExtensionSupport(VkPhysicalDevice device);
+    void RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) const;
 
-    SwapChainSupportDetails QuerySwapChainSupport(VkPhysicalDevice device);
+    bool CheckValidationLayerSupport() const;
+    bool CheckDeviceExtensionSupport(VkPhysicalDevice device) const;
 
-    std::vector<const char*> GetRequiredExtensions();
+    std::vector<const char*> GetRequiredExtensions() const;
 
-    VkSurfaceFormatKHR ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
-    VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);
-    VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities);
+    // Swap Chain
+    VkSurfaceFormatKHR ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats) const;
+    VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes) const;
+    VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities) const;
+    SwapChainSupportDetails QuerySwapChainSupport(VkPhysicalDevice device) const;
 
-    int RateDeviceSuitability(VkPhysicalDevice device);
+    int RateDeviceSuitability(VkPhysicalDevice device) const;
+
+    VkShaderModule CreateShaderModule(const std::vector<char>& code) const;
+
+    QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device) const;
 
 private:
+
     // is measured in screen coordinates
     // But Vulkan works with pixels
     // glfwGetFramebufferSize to query the resolution of the window in pixel
@@ -119,6 +127,8 @@ private:
     VkPipelineLayout m_PipelineLayout;
     VkPipeline m_GraphicsPipeline;
 
+    VkCommandPool m_CommandPool;
+    VkCommandBuffer m_CommandBuffer;
 
     const std::vector<const char*> m_ValidationLayers =
     {
@@ -130,12 +140,9 @@ private:
         VK_KHR_SWAPCHAIN_EXTENSION_NAME
     };
 
-    QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device);
-
 #ifdef NDEBUG
     const bool m_EnableValidationLayers = false;
 #else
     const bool m_EnableValidationLayers = true;
 #endif
-
 };

@@ -97,6 +97,8 @@ void HelloTriangleApplication::InitVulkan()
     CreateRenderPass();
     CreateGraphicsPipeline();
     CreateFramebuffers();
+    CreateCommandPool();
+    CreateCommandBuffer();
 }
 
 void HelloTriangleApplication::MainLoop()
@@ -111,6 +113,7 @@ void HelloTriangleApplication::Cleanup()
 {
     //Vulkan
     {
+        vkDestroyCommandPool(m_Device, m_CommandPool, nullptr);
         for (auto framebuffer : m_SwapChainFramebuffers)
         {
             vkDestroyFramebuffer(m_Device, framebuffer, nullptr);
@@ -828,11 +831,134 @@ void HelloTriangleApplication::CreateFramebuffers()
             throw std::runtime_error("failed to create framebuffer!");
         }
     }
-
-
 }
 
-VkShaderModule HelloTriangleApplication::CreateShaderModule(const std::vector<char>& code)
+void HelloTriangleApplication::CreateCommandPool()
+{
+    const QueueFamilyIndices queueFamilyIndices = FindQueueFamilies(m_PhysicalDevice);
+
+    VkCommandPoolCreateInfo poolInfo{};
+    poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
+    /*
+    There are two possible flags for command pools:
+        VK_COMMAND_POOL_CREATE_TRANSIENT_BIT: Hint that command buffers are rerecorded with new commands very often (may change memory allocation behavior)
+        VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT: Allow command buffers to be rerecorded individually, without this flag they all have to be reset together
+    Each command pool can only allocate command buffers that are submitted on a single type of queue.
+    */
+    if (vkCreateCommandPool(m_Device, &poolInfo, nullptr, &m_CommandPool) != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to create command pool!");
+    }
+}
+
+void HelloTriangleApplication::CreateCommandBuffer()
+{
+    VkCommandBufferAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.commandPool = m_CommandPool;
+    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandBufferCount = 1;
+
+    if (vkAllocateCommandBuffers(m_Device, &allocInfo, &m_CommandBuffer) != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to allocate command buffers!");
+    }
+    /*
+    The level parameter specifies if the allocated command buffers are primary or secondary command buffers.
+        VK_COMMAND_BUFFER_LEVEL_PRIMARY: Can be submitted to a queue for execution, but cannot be called from other command buffers.
+        VK_COMMAND_BUFFER_LEVEL_SECONDARY: Cannot be submitted directly, but can be called from primary command buffers.
+        (it's helpful to reuse common operations from primary command buffers.)
+    */
+}
+
+void HelloTriangleApplication::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) const
+{
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = 0; // Optional
+    beginInfo.pInheritanceInfo = nullptr; // Optional
+    /*
+    The flags parameter specifies how we're going to use the command buffer. The following values are available:
+        VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT: The command buffer will be rerecorded right after executing it once.
+        VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT: This is a secondary command buffer that will be entirely within a single render pass.
+        VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT: The command buffer can be resubmitted while it is also already pending execution.
+    The pInheritanceInfo parameter is only relevant for secondary command buffers.
+    It specifies which state to inherit from the calling primary command buffers
+    */
+    if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to begin recording command buffer!");
+    }
+
+    VkRenderPassBeginInfo renderPassInfo{};
+    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    renderPassInfo.renderPass = m_RenderPass;
+    renderPassInfo.framebuffer = m_SwapChainFramebuffers[imageIndex];
+
+    // Define the size of the render area
+    renderPassInfo.renderArea.offset = { 0, 0 };
+    renderPassInfo.renderArea.extent = m_SwapChainExtent;
+
+    VkClearValue clearColor = { {{0.0f, 0.0f, 0.0f, 1.0f}} };
+    renderPassInfo.clearValueCount = 1;
+    renderPassInfo.pClearValues = &clearColor;
+
+    vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+    /*
+    The first parameter for every command is always the command buffer to record the command to.
+    The second parameter specifies the details of the render pass we've just provided.
+    The final parameter controls how the drawing commands within the render pass will be provided.
+    It can have one of two values:
+        VK_SUBPASS_CONTENTS_INLINE: The render pass commands will be embedded in the primary command buffer itself and no secondary command buffers will be executed.
+        VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS: The render pass commands will be executed from secondary command buffers.
+    All of the functions that record commands can be recognized by their vkCmd prefix.
+    */
+
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_GraphicsPipeline);
+    /*
+    We've now told Vulkan which operations to execute in the graphics pipeline and
+    which attachment to use in the fragment shader.
+    */
+
+    VkViewport viewport{};
+    viewport.x = 0.0f;
+    viewport.y = 0.0f;
+    viewport.width = static_cast<float>(m_SwapChainExtent.width);
+    viewport.height = static_cast<float>(m_SwapChainExtent.height);
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+
+    VkRect2D scissor{};
+    scissor.offset = { 0, 0 };
+    scissor.extent = m_SwapChainExtent;
+    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+    /*
+    We did specify viewport and scissor state for this pipeline to be dynamic. 
+    So we need to set them in the command buffer before issuing our draw command.
+    */
+
+    vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+    /*
+    It has the following parameters, aside from the command buffer:
+        vertexCount: Even though we don't have a vertex buffer, we technically still have 3 vertices to draw.
+        instanceCount: Used for instanced rendering, use 1 if you're not doing that.
+        firstVertex: Used as an offset into the vertex buffer, defines the lowest value of gl_VertexIndex.
+        firstInstance: Used as an offset for instanced rendering, defines the lowest value of gl_InstanceIndex.
+    */
+
+    vkCmdEndRenderPass(commandBuffer);
+    
+    // We've finished recording the command buffer
+    if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to record command buffer!");
+    }
+}
+
+VkShaderModule HelloTriangleApplication::CreateShaderModule(const std::vector<char>& code) const
 {
     VkShaderModuleCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -848,7 +974,7 @@ VkShaderModule HelloTriangleApplication::CreateShaderModule(const std::vector<ch
     return shaderModule;
 }
 
-bool HelloTriangleApplication::CheckValidationLayerSupport()
+bool HelloTriangleApplication::CheckValidationLayerSupport() const
 {
     uint32_t layerCount;
     vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
@@ -878,7 +1004,7 @@ bool HelloTriangleApplication::CheckValidationLayerSupport()
     return true;
 }
 
-bool HelloTriangleApplication::CheckDeviceExtensionSupport(VkPhysicalDevice device)
+bool HelloTriangleApplication::CheckDeviceExtensionSupport(VkPhysicalDevice device) const
 {
     uint32_t extensionCount;
     vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
@@ -896,7 +1022,7 @@ bool HelloTriangleApplication::CheckDeviceExtensionSupport(VkPhysicalDevice devi
     return requiredExtensions.empty();
 }
 
-SwapChainSupportDetails HelloTriangleApplication::QuerySwapChainSupport(VkPhysicalDevice device)
+SwapChainSupportDetails HelloTriangleApplication::QuerySwapChainSupport(VkPhysicalDevice device) const
 {
     SwapChainSupportDetails details;
 
@@ -923,7 +1049,7 @@ SwapChainSupportDetails HelloTriangleApplication::QuerySwapChainSupport(VkPhysic
     return details;
 }
 
-std::vector<const char*> HelloTriangleApplication::GetRequiredExtensions()
+std::vector<const char*> HelloTriangleApplication::GetRequiredExtensions() const
 {
     uint32_t glfwExtensionCount = 0;
     const char** glfwExtensions;
@@ -939,7 +1065,7 @@ std::vector<const char*> HelloTriangleApplication::GetRequiredExtensions()
     return extensions;
 }
 
-VkSurfaceFormatKHR HelloTriangleApplication::ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats)
+VkSurfaceFormatKHR HelloTriangleApplication::ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats) const
 {
     for (const auto& availableFormat : availableFormats)
     {
@@ -953,7 +1079,7 @@ VkSurfaceFormatKHR HelloTriangleApplication::ChooseSwapSurfaceFormat(const std::
     return availableFormats[0];
 }
 
-VkPresentModeKHR HelloTriangleApplication::ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes)
+VkPresentModeKHR HelloTriangleApplication::ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes) const
 {
     // VK_PRESENT_MODE_MAILBOX_KHR is a very nice trade-off if energy usage is not a concern
     /*
@@ -971,7 +1097,7 @@ VkPresentModeKHR HelloTriangleApplication::ChooseSwapPresentMode(const std::vect
     return VK_PRESENT_MODE_FIFO_KHR;
 }
 
-VkExtent2D HelloTriangleApplication::ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities)
+VkExtent2D HelloTriangleApplication::ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities) const
 {
     if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max())
     {
@@ -995,7 +1121,7 @@ VkExtent2D HelloTriangleApplication::ChooseSwapExtent(const VkSurfaceCapabilitie
     }
 }
 
-QueueFamilyIndices HelloTriangleApplication::FindQueueFamilies(VkPhysicalDevice device)
+QueueFamilyIndices HelloTriangleApplication::FindQueueFamilies(VkPhysicalDevice device) const
 {
     QueueFamilyIndices indices;
     // Assign index to queue families that could be found
@@ -1030,7 +1156,7 @@ QueueFamilyIndices HelloTriangleApplication::FindQueueFamilies(VkPhysicalDevice 
     return indices;
 }
 
-int HelloTriangleApplication::RateDeviceSuitability(VkPhysicalDevice device)
+int HelloTriangleApplication::RateDeviceSuitability(VkPhysicalDevice device) const
 {
     int score = 0;
     // Checks the necessary queue family
