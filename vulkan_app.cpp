@@ -77,6 +77,7 @@ void ReadFile(const std::string& filename, std::vector<char>& buffer)
 void HelloTriangleApplication::Run()
 {
     InitWindow();
+
     InitVulkan();
 
     MainLoop();
@@ -95,6 +96,7 @@ void HelloTriangleApplication::InitVulkan()
     CreateImageViews();
     CreateRenderPass();
     CreateGraphicsPipeline();
+    CreateFramebuffers();
 }
 
 void HelloTriangleApplication::MainLoop()
@@ -109,6 +111,10 @@ void HelloTriangleApplication::Cleanup()
 {
     //Vulkan
     {
+        for (auto framebuffer : m_SwapChainFramebuffers)
+        {
+            vkDestroyFramebuffer(m_Device, framebuffer, nullptr);
+        }
         vkDestroyPipeline(m_Device, m_GraphicsPipeline, nullptr);
         vkDestroyPipelineLayout(m_Device, m_PipelineLayout, nullptr);
         vkDestroyRenderPass(m_Device, m_RenderPass, nullptr);
@@ -388,11 +394,11 @@ void HelloTriangleApplication::CreateSwapChain()
     }
     else
     {
-        /*
-            VK_SHARING_MODE_EXCLUSIVE
-            An image is owned by one queue family at a time and ownership must be explicitly
-            transferred before using it in another queue family. This option offers the best performance.
-        */
+/*
+    VK_SHARING_MODE_EXCLUSIVE
+    An image is owned by one queue family at a time and ownership must be explicitly
+    transferred before using it in another queue family. This option offers the best performance.
+*/
         createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
         createInfo.queueFamilyIndexCount = 0; // Optional
         createInfo.pQueueFamilyIndices = nullptr; // Optional
@@ -770,6 +776,7 @@ void HelloTriangleApplication::CreateGraphicsPipeline()
     to be created by index with basePipelineIndex. 
     */
 
+            
     if (vkCreateGraphicsPipelines(m_Device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_GraphicsPipeline) != VK_SUCCESS)
     {
         throw std::runtime_error("failed to create graphics pipeline!");
@@ -777,6 +784,52 @@ void HelloTriangleApplication::CreateGraphicsPipeline()
 
     vkDestroyShaderModule(m_Device, fragShaderModule, nullptr);
     vkDestroyShaderModule(m_Device, vertShaderModule, nullptr);
+}
+
+void HelloTriangleApplication::CreateFramebuffers()
+{
+    /*
+    The attachments specified during render pass creation are bound by wrapping them into a
+    VkFramebuffer object. A framebuffer object references all of the VkImageView objects
+    that represent the attachments.
+
+    That means that we have to create a framebuffer for all of the images in the swap chain and
+    use the one that corresponds to the retrieved image at drawing time.
+    */
+    m_SwapChainFramebuffers.resize(m_SwapChainImageViews.size());
+
+    for (size_t i = 0; i < m_SwapChainImageViews.size(); i++)
+    {
+        VkImageView attachments[] =
+        {
+            m_SwapChainImageViews[i]
+        };
+
+        VkFramebufferCreateInfo framebufferInfo{};
+        framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        framebufferInfo.renderPass = m_RenderPass;
+        framebufferInfo.attachmentCount = 1;
+        framebufferInfo.pAttachments = attachments;
+        framebufferInfo.width = m_SwapChainExtent.width;
+        framebufferInfo.height = m_SwapChainExtent.height;
+        framebufferInfo.layers = 1;
+        /*
+            We first need to specify with which renderPass the framebuffer needs to be compatible. 
+            You can only use a framebuffer with the render passes that it is compatible with, which roughly means
+            that they use the same number and type of attachments.
+
+            The attachmentCount and pAttachments parameters specify the VkImageView objects that should be bound
+            to the respective attachment descriptions in the render pass pAttachment array.
+
+            layers refers to the number of layers in image arrays
+        */
+        if (vkCreateFramebuffer(m_Device, &framebufferInfo, nullptr, &m_SwapChainFramebuffers[i]) != VK_SUCCESS)
+        {
+            throw std::runtime_error("failed to create framebuffer!");
+        }
+    }
+
+
 }
 
 VkShaderModule HelloTriangleApplication::CreateShaderModule(const std::vector<char>& code)
