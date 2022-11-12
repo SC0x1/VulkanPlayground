@@ -68,6 +68,8 @@ private:
     void PickPhysicalDevice();
     void CreateLogicalDevice();
     void CreateSwapChain();
+    void RecreateSwapChain();
+    void CleanupSwapChain();
     void CreateImageViews();
     void CreateRenderPass();
     void CreateGraphicsPipeline();
@@ -96,6 +98,8 @@ private:
     VkShaderModule CreateShaderModule(const std::vector<char>& code) const;
 
     QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device) const;
+
+    static void FramebufferResizeCallback(GLFWwindow* window, int width, int height);
 
 private:
     const int MAX_FRAMES_IN_FLIGHT = 2;
@@ -157,4 +161,6 @@ private:
 #else
     const bool m_EnableValidationLayers = true;
 #endif
+
+    bool m_IsFamebufferResized = false;
 };
