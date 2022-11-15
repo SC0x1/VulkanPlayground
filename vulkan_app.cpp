@@ -106,6 +106,7 @@ void HelloTriangleApplication::InitVulkan()
     CreateGraphicsPipeline();
     CreateFramebuffers();
     CreateCommandPool();
+    CreateVertexBuffer();
     CreateCommandBuffers();
     CreateSyncObjects();
 }
@@ -128,6 +129,9 @@ void HelloTriangleApplication::Cleanup()
     //Vulkan
     {
         CleanupSwapChain();
+
+        vkDestroyBuffer(m_Device, m_VertexBuffer, nullptr);
+        vkFreeMemory(m_Device, m_VertexBufferMemory, nullptr);
 
         vkDestroyPipeline(m_Device, m_GraphicsPipeline, nullptr);
         vkDestroyPipelineLayout(m_Device, m_PipelineLayout, nullptr);
@@ -951,6 +955,56 @@ void HelloTriangleApplication::CreateCommandPool()
     }
 }
 
+void HelloTriangleApplication::CreateVertexBuffer()
+{
+    VkBufferCreateInfo bufferInfo{};
+    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferInfo.size = sizeof(vertices[0]) * vertices.size();
+    bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    /*
+    Just like the images in the swap chain, buffers can also be owned by a specific queue family or
+    be shared between multiple at the same time. The buffer will only be used from the graphics queue,
+    so we can stick to exclusive access.
+    */
+
+    if (vkCreateBuffer(m_Device, &bufferInfo, nullptr, &m_VertexBuffer) != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to create vertex buffer!");
+    }
+
+    VkMemoryRequirements memRequirements;
+    vkGetBufferMemoryRequirements(m_Device, m_VertexBuffer, &memRequirements);
+
+    VkMemoryAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = memRequirements.size;
+    allocInfo.memoryTypeIndex = FindMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+    if (vkAllocateMemory(m_Device, &allocInfo, nullptr, &m_VertexBufferMemory) != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to allocate vertex buffer memory!");
+    }
+
+    vkBindBufferMemory(m_Device, m_VertexBuffer, m_VertexBufferMemory, 0);
+
+    void* data;
+    vkMapMemory(m_Device, m_VertexBufferMemory, 0, bufferInfo.size, 0, &data);
+    memcpy(data, vertices.data(), (size_t)bufferInfo.size);
+    vkUnmapMemory(m_Device, m_VertexBufferMemory);
+    /*
+    the driver may not immediately copy the data into the buffer memory, for example because of caching.
+    It is also possible that writes to the buffer are not visible in the mapped memory yet.
+    There are two ways to deal with that problem:
+=
+    Use a memory heap that is host coherent, indicated with VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+    Call vkFlushMappedMemoryRanges after writing to the mapped memory, and call vkInvalidateMappedMemoryRanges
+    before reading from the mapped memory
+
+    The transfer of memory to GPU is guaranteed to be complete as of the next call to vkQueueSubmit
+    */
+}
+
 void HelloTriangleApplication::CreateCommandBuffers()
 {
     m_CommandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
@@ -1034,49 +1088,57 @@ void HelloTriangleApplication::RecordCommandBuffer(VkCommandBuffer commandBuffer
     renderPassInfo.pClearValues = &clearColor;
 
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-    /*
-    The first parameter for every command is always the command buffer to record the command to.
-    The second parameter specifies the details of the render pass we've just provided.
-    The final parameter controls how the drawing commands within the render pass will be provided.
-    It can have one of two values:
-        VK_SUBPASS_CONTENTS_INLINE: The render pass commands will be embedded in the primary command buffer itself and no secondary command buffers will be executed.
-        VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS: The render pass commands will be executed from secondary command buffers.
-    All of the functions that record commands can be recognized by their vkCmd prefix.
-    */
+    {
+        /*
+        The first parameter for every command is always the command buffer to record the command to.
+        The second parameter specifies the details of the render pass we've just provided.
+        The final parameter controls how the drawing commands within the render pass will be provided.
+        It can have one of two values:
+            VK_SUBPASS_CONTENTS_INLINE: The render pass commands will be embedded in the primary command buffer itself and no secondary command buffers will be executed.
+            VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS: The render pass commands will be executed from secondary command buffers.
+        All of the functions that record commands can be recognized by their vkCmd prefix.
+        */
 
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_GraphicsPipeline);
-    /*
-    We've now told Vulkan which operations to execute in the graphics pipeline and
-    which attachment to use in the fragment shader.
-    */
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_GraphicsPipeline);
+        /*
+        We've now told Vulkan which operations to execute in the graphics pipeline and
+        which attachment to use in the fragment shader.
+        */
 
-    VkViewport viewport{};
-    viewport.x = 0.0f;
-    viewport.y = 0.0f;
-    viewport.width = static_cast<float>(m_SwapChainExtent.width);
-    viewport.height = static_cast<float>(m_SwapChainExtent.height);
-    viewport.minDepth = 0.0f;
-    viewport.maxDepth = 1.0f;
-    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+        VkViewport viewport{};
+        viewport.x = 0.0f;
+        viewport.y = 0.0f;
+        viewport.width = static_cast<float>(m_SwapChainExtent.width);
+        viewport.height = static_cast<float>(m_SwapChainExtent.height);
+        viewport.minDepth = 0.0f;
+        viewport.maxDepth = 1.0f;
+        vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
 
-    VkRect2D scissor{};
-    scissor.offset = { 0, 0 };
-    scissor.extent = m_SwapChainExtent;
-    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
-    /*
-    We did specify viewport and scissor state for this pipeline to be dynamic. 
-    So we need to set them in the command buffer before issuing our draw command.
-    */
+        VkRect2D scissor{};
+        scissor.offset = { 0, 0 };
+        scissor.extent = m_SwapChainExtent;
+        vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+        /*
+        We did specify viewport and scissor state for this pipeline to be dynamic.
+        So we need to set them in the command buffer before issuing our draw command.
+        */
 
-    vkCmdDraw(commandBuffer, 3, 1, 0, 0);
-    /*
-    It has the following parameters, aside from the command buffer:
-        vertexCount: Even though we don't have a vertex buffer, we technically still have 3 vertices to draw.
-        instanceCount: Used for instanced rendering, use 1 if you're not doing that.
-        firstVertex: Used as an offset into the vertex buffer, defines the lowest value of gl_VertexIndex.
-        firstInstance: Used as an offset for instanced rendering, defines the lowest value of gl_InstanceIndex.
-    */
+        VkBuffer vertexBuffers[] = { m_VertexBuffer };
+        VkDeviceSize offsets[] = { 0 };
+        vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
 
+        vkCmdDraw(commandBuffer, static_cast<uint32_t>(vertices.size()), 1, 0, 0);
+
+        //vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+
+        /*
+        It has the following parameters, aside from the command buffer:
+            vertexCount: Even though we don't have a vertex buffer, we technically still have 3 vertices to draw.
+            instanceCount: Used for instanced rendering, use 1 if you're not doing that.
+            firstVertex: Used as an offset into the vertex buffer, defines the lowest value of gl_VertexIndex.
+            firstInstance: Used as an offset for instanced rendering, defines the lowest value of gl_InstanceIndex.
+        */
+    }
     vkCmdEndRenderPass(commandBuffer);
     
     // We've finished recording the command buffer
@@ -1469,6 +1531,28 @@ QueueFamilyIndices HelloTriangleApplication::FindQueueFamilies(VkPhysicalDevice 
     }
 
     return indices;
+}
+
+uint32_t HelloTriangleApplication::FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties)
+{
+    VkPhysicalDeviceMemoryProperties memProperties;
+    vkGetPhysicalDeviceMemoryProperties(m_PhysicalDevice, &memProperties);
+
+    for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++)
+    {
+        if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties)
+        {
+            return i;
+        }
+    }
+    /*
+    The memoryTypes array consists of VkMemoryType structs that specify the heap and properties of each type of memory.
+    The properties define special features of the memory, like being able to map it so we can write to it from the CPU.
+    This property is indicated with VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+    but we also need to use the VK_MEMORY_PROPERTY_HOST_COHERENT_BIT property.
+    */
+
+    throw std::runtime_error("failed to find suitable memory type!");
 }
 
 int HelloTriangleApplication::RateDeviceSuitability(VkPhysicalDevice device) const

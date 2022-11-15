@@ -147,3 +147,4 @@ _DESIGN/
 *.tga
 !*.PNG
 /x64/Debug/*
+/Temp/Debug
