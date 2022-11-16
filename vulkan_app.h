@@ -153,6 +153,8 @@ private:
     int RateDeviceSuitability(VkPhysicalDevice device) const;
 
     VkShaderModule CreateShaderModule(const std::vector<char>& code) const;
+    void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
+    void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 
     QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device) const;
 
