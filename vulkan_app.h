@@ -71,15 +71,19 @@ struct Vertex
 
         return attributeDescriptions;
     }
-
-
 };
 
-const std::vector<Vertex> vertices =
+const std::vector<Vertex> verticesData =
 {
-    {{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-    {{0.5f, 0.5f},  {0.0f, 1.0f, 0.0f}},
-    {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}
+    {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+    {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+    {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+    {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
+};
+
+const std::vector<uint16_t> indicesData =
+{
+    0, 1, 2, 2, 3, 0
 };
 
 struct QueueFamilyIndices
@@ -132,6 +136,7 @@ private:
     void CreateFramebuffers();
     void CreateCommandPool();
     void CreateVertexBuffer();
+    void CreateIndexBuffer();
     void CreateCommandBuffers();
     void CreateSyncObjects();
 
@@ -201,6 +206,8 @@ private:
 
     VkBuffer m_VertexBuffer;
     VkDeviceMemory m_VertexBufferMemory;
+    VkBuffer m_IndexBuffer;
+    VkDeviceMemory m_IndexBufferMemory;
 
     std::vector<VkCommandBuffer> m_CommandBuffers;
 
