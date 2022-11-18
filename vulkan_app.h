@@ -86,6 +86,13 @@ const std::vector<uint16_t> indicesData =
     0, 1, 2, 2, 3, 0
 };
 
+struct UniformBufferObject
+{
+    glm::mat4 model;
+    glm::mat4 view;
+    glm::mat4 proj;
+};
+
 struct QueueFamilyIndices
 {
     std::optional<uint32_t> graphicsFamily;
@@ -132,15 +139,19 @@ private:
     void CleanupSwapChain();
     void CreateImageViews();
     void CreateRenderPass();
+    void CreateDescriptorSetLayout();
     void CreateGraphicsPipeline();
     void CreateFramebuffers();
     void CreateCommandPool();
     void CreateVertexBuffer();
     void CreateIndexBuffer();
+    void CreateUniformBuffers();
     void CreateCommandBuffers();
     void CreateSyncObjects();
 
     void RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) const;
+
+    void UpdateUniformBuffer(uint32_t currentImage);
 
     void DrawFrame();
 
@@ -199,6 +210,7 @@ private:
 
     // Pipeline
     VkRenderPass m_RenderPass;
+    VkDescriptorSetLayout m_DescriptorSetLayout; // UBO
     VkPipelineLayout m_PipelineLayout;
     VkPipeline m_GraphicsPipeline;
 
@@ -208,6 +220,10 @@ private:
     VkDeviceMemory m_VertexBufferMemory;
     VkBuffer m_IndexBuffer;
     VkDeviceMemory m_IndexBufferMemory;
+
+    std::vector<VkBuffer> m_UniformBuffers;
+    std::vector<VkDeviceMemory> m_UniformBuffersMemory;
+    std::vector<void*> m_UniformBuffersMapped;
 
     std::vector<VkCommandBuffer> m_CommandBuffers;
 
