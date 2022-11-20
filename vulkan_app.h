@@ -144,6 +144,8 @@ private:
     void CreateFramebuffers();
     void CreateCommandPool();
     void CreateTextureImage();
+    void CreateTextureImageView();
+    void CreateTextureSampler();
     void CreateVertexBuffer();
     void CreateIndexBuffer();
     void CreateUniformBuffers();
@@ -173,6 +175,8 @@ private:
     SwapChainSupportDetails QuerySwapChainSupport(VkPhysicalDevice device) const;
 
     int RateDeviceSuitability(VkPhysicalDevice device) const;
+
+    VkImageView CreateImageView(VkImage image, VkFormat format) const;
 
     VkShaderModule CreateShaderModule(const std::vector<char>& code) const;
     void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
@@ -239,6 +243,8 @@ private:
 
     VkImage m_TextureImage;
     VkDeviceMemory m_TextureImageMemory;
+    VkImageView m_TextureImageView;
+    VkSampler m_TextureSampler;
 
     std::vector<VkCommandBuffer> m_CommandBuffers;
 

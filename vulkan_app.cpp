@@ -116,6 +116,8 @@ void HelloTriangleApplication::InitVulkan()
     CreateFramebuffers();
     CreateCommandPool();
     CreateTextureImage();
+    CreateTextureImageView();
+    CreateTextureSampler();
     CreateVertexBuffer();
     CreateIndexBuffer();
     CreateUniformBuffers();
@@ -143,6 +145,9 @@ void HelloTriangleApplication::Cleanup()
     //Vulkan
     {
         CleanupSwapChain();
+
+        vkDestroySampler(m_Device, m_TextureSampler, nullptr);
+        vkDestroyImageView(m_Device, m_TextureImageView, nullptr);
 
         vkDestroyImage(m_Device, m_TextureImage, nullptr);
         vkFreeMemory(m_Device, m_TextureImageMemory, nullptr);
@@ -361,6 +366,7 @@ void HelloTriangleApplication::CreateLogicalDevice()
     }
 
     VkPhysicalDeviceFeatures deviceFeatures{};
+    deviceFeatures.samplerAnisotropy = VK_TRUE;
 
     VkDeviceCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -546,39 +552,10 @@ void HelloTriangleApplication::CreateImageViews()
 {
     m_SwapChainImageViews.resize(m_SwapChainImages.size());
 
-    for (size_t i = 0; i < m_SwapChainImages.size(); i++)
+    for (uint32_t i = 0; i < m_SwapChainImages.size(); i++)
     {
-        VkImageViewCreateInfo createInfo{};
-        createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        createInfo.image = m_SwapChainImages[i];
-        // viewType parameter allows you to treat images as 1D textures, 2D textures, 3D textures and cube maps
-        createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        createInfo.format = m_SwapChainImageFormat;
-        /*
-            The components field allows you to swizzle the color channels around.
-            For example, you can map all of the channels to the red channel for a monochrome texture.
-            You can also map constant values of 0 and 1 to a channel
-        */
-        createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-        createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-        createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-        createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-        /*
-            subresourceRange field describes what the image's purpose is and which part of the image should be accessed.
-            Our images will be used as color targets without any mipmapping levels or multiple layers
-        */
-        createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        createInfo.subresourceRange.baseMipLevel = 0;
-        createInfo.subresourceRange.levelCount = 1;
-        createInfo.subresourceRange.baseArrayLayer = 0;
-        createInfo.subresourceRange.layerCount = 1;
-
-        if (vkCreateImageView(m_Device, &createInfo, nullptr, &m_SwapChainImageViews[i]) != VK_SUCCESS)
-        {
-            throw std::runtime_error("failed to create image views!");
-        }
+        m_SwapChainImageViews[i] = CreateImageView(m_SwapChainImages[i], m_SwapChainImageFormat);
     }
-    // An image view is sufficient to start using an image as a texture
 }
 
 void HelloTriangleApplication::CreateRenderPass()
@@ -1057,6 +1034,78 @@ void HelloTriangleApplication::CreateTextureImage()
 
     vkDestroyBuffer(m_Device, stagingBuffer, nullptr);
     vkFreeMemory(m_Device, stagingBufferMemory, nullptr);
+}
+
+void HelloTriangleApplication::CreateTextureImageView()
+{
+    m_TextureImageView = CreateImageView(m_TextureImage, VK_FORMAT_R8G8B8A8_SRGB);
+}
+
+void HelloTriangleApplication::CreateTextureSampler()
+{
+    VkSamplerCreateInfo samplerInfo{};
+    samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    samplerInfo.magFilter = VK_FILTER_LINEAR;
+    samplerInfo.minFilter = VK_FILTER_LINEAR;
+    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    /*
+    VK_SAMPLER_ADDRESS_MODE_REPEAT: Repeat the texture when going beyond the image dimensions.
+    VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT: Like repeat, but inverts the coordinates to mirror the image when going beyond the dimensions.
+    VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE: Take the color of the edge closest to the coordinate beyond the image dimensions.
+    VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE: Like clamp to edge, but instead uses the edge opposite to the closest edge.
+    VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER: Return a solid color when sampling beyond the dimensions of the image.
+    */
+
+    // Anisotropy
+    VkPhysicalDeviceProperties properties{};
+    vkGetPhysicalDeviceProperties(m_PhysicalDevice, &properties);
+
+    samplerInfo.anisotropyEnable = VK_TRUE;
+    /*
+    samplerInfo.anisotropyEnable = VK_FALSE; // in case if we don't want to request it at startup
+    samplerInfo.maxAnisotropy = 1.0f;
+    */
+    samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
+    samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+    /*
+    The borderColor field specifies which color is returned when sampling beyond the image with clamp to border addressing mode.
+    It is possible to return black, white or transparent in either float or int formats. You cannot specify an arbitrary color.
+    */
+
+    samplerInfo.unnormalizedCoordinates = VK_FALSE;
+    /*
+    The unnormalizedCoordinates field specifies which coordinate system you want to use to address texels in an image.
+    If this field is VK_TRUE, then you can simply use coordinates within the [0, texWidth) and [0, texHeight) range.
+    If it is VK_FALSE, then the texels are addressed using the [0, 1) range on all axes. Real-world applications almost always use normalized coordinates,
+    because then it's possible to use textures of varying resolutions with the exact same coordinates.
+    */
+
+    samplerInfo.compareEnable = VK_FALSE;
+    samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+    /*
+    If a comparison function is enabled, then texels will first be compared to a value,
+    and the result of that comparison is used in filtering operations.
+    This is mainly used for percentage-closer filtering on shadow maps.
+    */
+
+    // Mipmapping
+    samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    samplerInfo.mipLodBias = 0.0f;
+    samplerInfo.minLod = 0.0f;
+    samplerInfo.maxLod = 0.0f;
+
+    if (vkCreateSampler(m_Device, &samplerInfo, nullptr, &m_TextureSampler) != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to create texture sampler!");
+    }
+
+    /*
+    the sampler does not reference a VkImage anywhere. The sampler is a distinct object that provides an interface to extract colors from a texture.
+    It can be applied to any image you want, whether it is 1D, 2D or 3D.
+    This is different from many older APIs, which combined texture images and filtering into a single state.
+    */
 }
 
 void HelloTriangleApplication::CreateVertexBuffer()
@@ -1589,6 +1638,42 @@ void HelloTriangleApplication::DrawFrame()
     m_CurrentFrameIdx = (m_CurrentFrameIdx + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
+VkImageView HelloTriangleApplication::CreateImageView(VkImage image, VkFormat format) const
+{
+    VkImageViewCreateInfo viewInfo{};
+    viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    viewInfo.image = image;
+    // viewType parameter allows you to treat images as 1D textures, 2D textures, 3D textures and cube maps
+    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    viewInfo.format = format;
+    /*
+        The components field allows you to swizzle the color channels around.
+        For example, you can map all of the channels to the red channel for a monochrome texture.
+        You can also map constant values of 0 and 1 to a channel
+    */
+    viewInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+    viewInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+    viewInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+    viewInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+    /*
+        subresourceRange field describes what the image's purpose is and which part of the image should be accessed.
+        Our images will be used as color targets without any mipmapping levels or multiple layers
+    */
+    viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    viewInfo.subresourceRange.baseMipLevel = 0;
+    viewInfo.subresourceRange.levelCount = 1;
+    viewInfo.subresourceRange.baseArrayLayer = 0;
+    viewInfo.subresourceRange.layerCount = 1;
+
+    VkImageView imageView;
+    if (vkCreateImageView(m_Device, &viewInfo, nullptr, &imageView) != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to create texture image view!");
+    }
+
+    return imageView;
+}
+
 VkShaderModule HelloTriangleApplication::CreateShaderModule(const std::vector<char>& code) const
 {
     VkShaderModuleCreateInfo createInfo{};
@@ -2078,6 +2163,12 @@ int HelloTriangleApplication::RateDeviceSuitability(VkPhysicalDevice device) con
 
     // Application can't function without geometry shaders
     if (!deviceFeatures.geometryShader)
+    {
+        return 0;
+    }
+
+    // We require the device that has support of anisotropic filtering
+    if (!deviceFeatures.samplerAnisotropy)
     {
         return 0;
     }

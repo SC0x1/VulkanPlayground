@@ -135,6 +135,7 @@ Externals/*
 !/Externals/stblib
 !/Externals/turf
 !/Externals/assimp
+!/Externals/stb
 
 Data/*
 !/Data/Screenshots/
