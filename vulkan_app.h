@@ -8,6 +8,8 @@
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE //  OpenGL depth range of -1.0 to 1.0 by default. Vulkan range of 0.0 to 1.0
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/hash.hpp>
 
 #include <cstdint>   // Necessary for uint32_t
 #include <limits>    // Necessary for std::numeric_limits
@@ -80,7 +82,23 @@ struct Vertex
 
         return attributeDescriptions;
     }
+
+    bool operator==(const Vertex& other) const
+    {
+        return pos == other.pos && color == other.color && texCoord == other.texCoord;
+    }
 };
+
+namespace std
+{
+    template<> struct hash<Vertex>
+    {
+        size_t operator()(Vertex const& vertex) const
+        {
+            return ((hash<glm::vec3>()(vertex.pos) ^ (hash<glm::vec3>()(vertex.color) << 1)) >> 1) ^ (hash<glm::vec2>()(vertex.texCoord) << 1);
+        }
+    };
+}
 
 //const std::vector<Vertex> verticesData = {
 //    {{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
