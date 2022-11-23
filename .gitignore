@@ -136,11 +136,15 @@ Externals/*
 !/Externals/turf
 !/Externals/assimp
 !/Externals/stb
+!/Externals/tinyobjloader
 
 Data/*
 !/Data/Screenshots/
 !/Data/Shaders
 !/Data/Scripts
+
+!/Models/viking_room.obj
+!/Textures/
 
 _DESIGN/
 

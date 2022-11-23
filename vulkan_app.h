@@ -82,27 +82,27 @@ struct Vertex
     }
 };
 
-const std::vector<Vertex> verticesData = {
-    {{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-    {{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
-    {{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-    {{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
-
-    {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-    {{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
-    {{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-    {{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}
-};
+//const std::vector<Vertex> verticesData = {
+//    {{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+//    {{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+//    {{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+//    {{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
+//
+//    {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+//    {{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+//    {{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+//    {{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}
+//};
 /*
  I will simply fill the square with the texture by using coordinates from 0, 0 in the top-left corner to 1, 1 in the bottom-right corner.
  Try using coordinates below 0 or above 1 to see the addressing modes in action!
 */
 
-const std::vector<uint16_t> indicesData =
-{
-    0, 1, 2, 2, 3, 0,
-    4, 5, 6, 6, 7, 4
-};
+//const std::vector<uint16_t> indicesData =
+//{
+//    0, 1, 2, 2, 3, 0,
+//    4, 5, 6, 6, 7, 4
+//};
 
 struct UniformBufferObject
 {
@@ -221,6 +221,8 @@ private:
 
     static void FramebufferResizeCallback(GLFWwindow* window, int width, int height);
 
+    void LoadModel();
+
 private:
     const int MAX_FRAMES_IN_FLIGHT = 2;
 
@@ -260,6 +262,10 @@ private:
     VkCommandPool m_CommandPool;
     VkDescriptorPool m_DescriptorPool;
     std::vector<VkDescriptorSet> m_DescriptorSets;
+
+    // Mesh data
+    std::vector<Vertex> m_Vertices;
+    std::vector<uint32_t> m_Indices;
 
     VkBuffer m_VertexBuffer;
     VkDeviceMemory m_VertexBufferMemory;
