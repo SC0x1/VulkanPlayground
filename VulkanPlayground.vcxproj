@@ -92,7 +92,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>%VULKAN_SDK%\include\;$(ProjectDir)\Externals\stb\;$(ProjectDir)\Externals\glm\;$(ProjectDir)\Externals\glfw\include\;$(ProjectDir)\Externals\tinyobjloader\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>%VULKAN_SDK%\include\;$(ProjectDir)\Externals\stb\;$(ProjectDir)\Externals\glm\;$(ProjectDir)\Externals\glfw\include\;$(ProjectDir)\Externals\tinyobjloader\;$(ProjectDir)\Source\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
@@ -110,7 +110,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>%VULKAN_SDK%\include\;$(ProjectDir)\Externals\stb\;$(ProjectDir)\Externals\glm\;$(ProjectDir)\Externals\glfw\include\;$(ProjectDir)\Externals\tinyobjloader\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>%VULKAN_SDK%\include\;$(ProjectDir)\Externals\stb\;$(ProjectDir)\Externals\glm\;$(ProjectDir)\Externals\glfw\include\;$(ProjectDir)\Externals\tinyobjloader\;$(ProjectDir)\Source\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
@@ -128,7 +128,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>%VULKAN_SDK%\include\;$(ProjectDir)\Externals\stb\;$(ProjectDir)\Externals\glm\;$(ProjectDir)\Externals\glfw\include\;$(ProjectDir)\Externals\tinyobjloader\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>%VULKAN_SDK%\include\;$(ProjectDir)\Externals\stb\;$(ProjectDir)\Externals\glm\;$(ProjectDir)\Externals\glfw\include\;$(ProjectDir)\Externals\tinyobjloader\;$(ProjectDir)\Source\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
@@ -146,7 +146,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>%VULKAN_SDK%\include\;$(ProjectDir)\Externals\stb\;$(ProjectDir)\Externals\glm\;$(ProjectDir)\Externals\glfw\include\;$(ProjectDir)\Externals\tinyobjloader\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>%VULKAN_SDK%\include\;$(ProjectDir)\Externals\stb\;$(ProjectDir)\Externals\glm\;$(ProjectDir)\Externals\glfw\include\;$(ProjectDir)\Externals\tinyobjloader\;$(ProjectDir)\Source\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
@@ -159,11 +159,42 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="main.cpp" />
-    <ClCompile Include="vulkan_app.cpp" />
+    <ClCompile Include="Source\common\vulkanbaseapp.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Use</PrecompiledHeader>
+      <PrecompiledHeaderFile Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">VKPlayground_PCH.h</PrecompiledHeaderFile>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Use</PrecompiledHeader>
+      <PrecompiledHeaderFile Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">VKPlayground_PCH.h</PrecompiledHeaderFile>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Use</PrecompiledHeader>
+      <PrecompiledHeaderFile Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">VKPlayground_PCH.h</PrecompiledHeaderFile>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Use</PrecompiledHeader>
+      <PrecompiledHeaderFile Condition="'$(Configuration)|$(Platform)'=='Release|x64'">VKPlayground_PCH.h</PrecompiledHeaderFile>
+    </ClCompile>
+    <ClCompile Include="Source\main.cpp" />
+    <ClCompile Include="Source\example_app.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Use</PrecompiledHeader>
+      <PrecompiledHeaderFile Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">VKPlayground_PCH.h</PrecompiledHeaderFile>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Use</PrecompiledHeader>
+      <PrecompiledHeaderFile Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">VKPlayground_PCH.h</PrecompiledHeaderFile>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Use</PrecompiledHeader>
+      <PrecompiledHeaderFile Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">VKPlayground_PCH.h</PrecompiledHeaderFile>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Use</PrecompiledHeader>
+      <PrecompiledHeaderFile Condition="'$(Configuration)|$(Platform)'=='Release|x64'">VKPlayground_PCH.h</PrecompiledHeaderFile>
+    </ClCompile>
+    <ClCompile Include="Source\VKPlayground_PCH.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
+      <PrecompiledHeaderFile Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">VKPlayground_PCH.h</PrecompiledHeaderFile>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
+      <PrecompiledHeaderFile Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">VKPlayground_PCH.h</PrecompiledHeaderFile>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
+      <PrecompiledHeaderFile Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">VKPlayground_PCH.h</PrecompiledHeaderFile>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
+      <PrecompiledHeaderFile Condition="'$(Configuration)|$(Platform)'=='Release|x64'">VKPlayground_PCH.h</PrecompiledHeaderFile>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="vulkan_app.h" />
+    <ClInclude Include="Source\VKPlayground_PCH.h" />
+    <ClInclude Include="Source\common\vulkanbaseapp.h" />
+    <ClInclude Include="Source\example_app.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="compile_shaders.bat" />

@@ -1,12 +1,10 @@
-#include "vulkan_app.h"
+#include "VKPlayground_PCH.h"
 
-/*
-    https://vulkan-tutorial.com/
-*/
+#include "example_app.h"
 
 int main()
 {
-    HelloTriangleApplication app;
+    VulkanExample app;
 
     try
     {
