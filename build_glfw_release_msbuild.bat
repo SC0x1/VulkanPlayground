@@ -2,12 +2,12 @@
 cls
 
 set rootDir=%~dp0%
-set srcPath=%~dp0\Externals\glfw
-set solutionDir=%srcPath%\build
+set srcPath=%~dp0\externals\glfw
+set buildDir=%srcPath%\build
 
-cmake -S %srcPath% -B %solutionDir%
+cmake -S %srcPath% -B %buildDir%
 
-set vswhereDir=C:\Program Files (x86)\Microsoft Visual Studio\Installer
+set vswhereDir="%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\"
 cd /d %vswhereDir%
 echo  %vswhereDir%
 
@@ -24,6 +24,6 @@ if exist "%InstallDir%\VC\Auxiliary\Build\vcvars64.bat" (
 
 echo %InstallDir%
 
-cd /d %solutionDir%
+cd /d %buildDir%
 
-msbuild GLFW.sln /target:GLFW3\glfw:Rebuild /property:Configuration=Release;OutDir="%rootDir%\Binaries\Lib" /t:Clean
+msbuild GLFW.sln /target:GLFW3\glfw:Rebuild /property:Configuration=Release;OutDir="%rootDir%\build\libs" /t:Clean

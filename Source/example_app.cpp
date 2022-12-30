@@ -8,8 +8,12 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
-const std::string MODEL_PATH = "Models/viking_room.obj";
-const std::string TEXTURE_PATH = "Textures/viking_room.png";
+#ifndef VKPG_ROOT_DIR
+#define VKPG_ROOT_DIR "./"
+#endif
+
+const std::string MODEL_PATH = "models/viking_room.obj";
+const std::string TEXTURE_PATH = "textures/viking_room.png";
 
 void ReadFile(const std::string& filename, std::vector<char>& buffer)
 {
@@ -136,9 +140,12 @@ void VulkanExample::CreateDescriptorSetLayout()
 void VulkanExample::CreateGraphicsPipeline()
 {
     std::vector<char> vertShaderCode;
-    ReadFile("shaders/vert.spv", vertShaderCode);
-    std::vector<char>  fragShaderCode;
-    ReadFile("shaders/frag.spv", fragShaderCode);
+    const std::string pathVert = VKPG_ROOT_DIR + std::string("shaders/shader.vert.spv");
+    const std::string pathFrag = VKPG_ROOT_DIR + std::string("shaders/shader.frag.spv");
+
+    ReadFile(pathVert.c_str(), vertShaderCode);
+    std::vector<char> fragShaderCode;
+    ReadFile(pathFrag.c_str(), fragShaderCode);
 
     const VkShaderModule vertShaderModule = CreateShaderModule(vertShaderCode);
     const VkShaderModule fragShaderModule = CreateShaderModule(fragShaderCode);
@@ -395,7 +402,8 @@ void VulkanExample::CreateTextureImage()
 {
     int texWidth, texHeight, texChannels;
     //stbi_uc* pixels = stbi_load("textures/texture.png", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
-    stbi_uc* pixels = stbi_load(TEXTURE_PATH.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+    const std::string pathTexture = VKPG_ROOT_DIR + TEXTURE_PATH;
+    stbi_uc* pixels = stbi_load(pathTexture.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
     VkDeviceSize imageSize = texWidth * texHeight * 4;
 
     if (!pixels)
@@ -867,7 +875,9 @@ void VulkanExample::LoadModel()
     std::vector<tinyobj::material_t> materials;
     std::string warn, err;
 
-    if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, MODEL_PATH.c_str()))
+    const std::string pathModel = VKPG_ROOT_DIR + MODEL_PATH;
+
+    if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, pathModel.c_str()))
     {
         throw std::runtime_error(warn + err);
     }
