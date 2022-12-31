@@ -1714,6 +1714,14 @@ int VulkanBaseApp::RateDeviceSuitability(VkPhysicalDevice device) const
     {
         score += 1000;
     }
+    else if (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU)
+    {
+        score += 500;
+    }
+    else if (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU)
+    {
+        score += 200;
+    }
 
     // Maximum possible size of textures affects graphics quality
     score += deviceProperties.limits.maxImageDimension2D;

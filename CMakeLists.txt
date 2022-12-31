@@ -1,4 +1,4 @@
-include(./envWindows.cmake OPTIONAL RESULT_VARIABLE LOCAL_ENV)
+include(./env.cmake OPTIONAL RESULT_VARIABLE LOCAL_ENV)
 message(STATUS "Local .env.cmake: ${LOCAL_ENV}")
  
 cmake_minimum_required(VERSION 3.11.0)
@@ -41,6 +41,9 @@ if (DEFINED GLFW_PATH)
   elseif (CMAKE_GENERATOR STREQUAL "MinGW Makefiles")
     message(STATUS "USING MINGW")
     set(GLFW_LIB "${GLFW_PATH}/build/src/") # 2.1 make sure matches glfw mingw subdirectory
+  elseif(UNIX)
+    message(STATUS "GLFW UNIX LIB")
+    set(GLFW_LIB "${GLFW_PATH}/build/src/")
   endif()
 else()
   find_package(glfw3 3.3 REQUIRED)
@@ -53,21 +56,21 @@ else()
     message(STATUS "Using glfw lib at: ${GLFW_LIB}")
 endif()
  
-include_directories(external)
+include_directories(External)
  
 # If TINYOBJ_PATH not specified in .env.cmake, try fetching from git repo
 if (NOT TINYOBJ_PATH)
   message(STATUS "TINYOBJ_PATH not specified in .env.cmake, using externals/tinyobjloader")
-  set(TINYOBJ_PATH externals/tinyobjloader)
+  set(TINYOBJ_PATH Externals/tinyobjloader)
 endif()
  
 # If STB_PATH not specified in .env.cmake, try fetching from git repo
 if (NOT STB_PATH)
   message(STATUS "STB_PATH not specified in .env.cmake, using externals/stb")
-  set(STB_PATH externals/tinyobjloader)
+  set(STB_PATH Externals/tinyobjloader)
 endif()
 
-file(GLOB_RECURSE SOURCES ${PROJECT_SOURCE_DIR}/source/*.cpp)
+file(GLOB_RECURSE SOURCES ${PROJECT_SOURCE_DIR}/Source/*.cpp)
  
 add_executable(${PROJECT_NAME} ${SOURCES})
  
@@ -88,7 +91,7 @@ if (WIN32)
   endif()
  
   target_include_directories(${PROJECT_NAME} PUBLIC
-    ${PROJECT_SOURCE_DIR}/source
+    ${PROJECT_SOURCE_DIR}/Source
     ${Vulkan_INCLUDE_DIRS}
     ${TINYOBJ_PATH}
     ${STB_PATH}
@@ -105,10 +108,17 @@ if (WIN32)
 elseif (UNIX)
     message(STATUS "CREATING BUILD FOR UNIX")
     target_include_directories(${PROJECT_NAME} PUBLIC
-      ${PROJECT_SOURCE_DIR}/source
+      ${PROJECT_SOURCE_DIR}/Source
       ${TINYOBJ_PATH}
       ${STB_PATH}
+      ${GLFW_INCLUDE_DIRS}
+      ${GLM_PATH}
     )
+
+    target_link_directories(${PROJECT_NAME} PUBLIC
+      ${GLFW_LIB}
+    )
+
     target_link_libraries(${PROJECT_NAME} libglfw3.a ${Vulkan_LIBRARIES})
 endif()
  
@@ -130,13 +140,13 @@ find_program(GLSL_VALIDATOR glslangValidator HINTS
  
 # get all .vert and .frag files in shaders directory
 file(GLOB_RECURSE GLSL_SOURCE_FILES
-  "${PROJECT_SOURCE_DIR}/shaders/*.frag"
-  "${PROJECT_SOURCE_DIR}/shaders/*.vert"
+  "${PROJECT_SOURCE_DIR}/Shaders/*.frag"
+  "${PROJECT_SOURCE_DIR}/Shaders/*.vert"
 )
  
 foreach(GLSL ${GLSL_SOURCE_FILES})
   get_filename_component(FILE_NAME ${GLSL} NAME)
-  set(SPIRV "${PROJECT_SOURCE_DIR}/shaders/${FILE_NAME}.spv")
+  set(SPIRV "${PROJECT_SOURCE_DIR}/Shaders/${FILE_NAME}.spv")
   add_custom_command(
     OUTPUT ${SPIRV}
     COMMAND ${GLSL_VALIDATOR} -V ${GLSL} -o ${SPIRV}

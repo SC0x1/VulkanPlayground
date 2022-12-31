@@ -9,11 +9,11 @@
 #include <stb_image.h>
 
 #ifndef VKPG_ROOT_DIR
-#define VKPG_ROOT_DIR "./"
+#define VKPG_ROOT_DIR "../"
 #endif
 
-const std::string MODEL_PATH = "models/viking_room.obj";
-const std::string TEXTURE_PATH = "textures/viking_room.png";
+const std::string MODEL_PATH = "Models/viking_room.obj";
+const std::string TEXTURE_PATH = "Textures/viking_room.png";
 
 void ReadFile(const std::string& filename, std::vector<char>& buffer)
 {
@@ -140,8 +140,8 @@ void VulkanExample::CreateDescriptorSetLayout()
 void VulkanExample::CreateGraphicsPipeline()
 {
     std::vector<char> vertShaderCode;
-    const std::string pathVert = VKPG_ROOT_DIR + std::string("shaders/shader.vert.spv");
-    const std::string pathFrag = VKPG_ROOT_DIR + std::string("shaders/shader.frag.spv");
+    const std::string pathVert = VKPG_ROOT_DIR + std::string("Shaders/shader.vert.spv");
+    const std::string pathFrag = VKPG_ROOT_DIR + std::string("Shaders/shader.frag.spv");
 
     ReadFile(pathVert.c_str(), vertShaderCode);
     std::vector<char> fragShaderCode;
