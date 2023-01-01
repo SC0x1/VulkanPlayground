@@ -1,8 +1,8 @@
 include(./env.cmake OPTIONAL RESULT_VARIABLE LOCAL_ENV)
 message(STATUS "Local .env.cmake: ${LOCAL_ENV}")
- 
+
 cmake_minimum_required(VERSION 3.11.0)
- 
+
 set(NAME VulkanPlayground)
 
 message(STATUS "using ${CMAKE_GENERATOR}")
@@ -10,12 +10,13 @@ if (CMAKE_GENERATOR STREQUAL "MinGW Makefiles")
     if (NOT MINGW_PATH) 
       message(FATAL_ERROR "MINGW_PATH not set in .env.cmake")
     endif()
+
     set(USE_MINGW "True")
     set(CMAKE_C_COMPILER ${MINGW_PATH}/bin/gcc.exe)
     set(CMAKE_CXX_COMPILER  ${MINGW_PATH}/bin/g++.exe)
 endif()
 
-project(${NAME} VERSION 0.23.0)
+project(${NAME} VERSION 0.01.0)
 
 # 1. Set VULKAN_SDK_PATH in .env.cmake to target specific vulkan version
 if (DEFINED VULKAN_SDK_PATH)
@@ -24,8 +25,10 @@ if (DEFINED VULKAN_SDK_PATH)
   set(Vulkan_FOUND "True")
 else()
   find_package(Vulkan REQUIRED) # throws error if could not find Vulkan
-  message(STATUS "Found Vulkan: $ENV{VULKAN_SDK}")
+  message(STATUS "Found Vulkan (REQUIRED): $ENV{VULKAN_SDK}")
+  set(Vulkan_LIBRARIES "$ENV{VULKAN_SDK}/Lib")
 endif()
+
 if (NOT Vulkan_FOUND)
     message(FATAL_ERROR "Could not find Vulkan library!")
 else()
@@ -37,7 +40,8 @@ if (DEFINED GLFW_PATH)
   message(STATUS "Using GLFW path specified in .env")
   set(GLFW_INCLUDE_DIRS "${GLFW_PATH}/include")
   if (MSVC)
-    set(GLFW_LIB "${GLFW_PATH}/build/src/") # 2.1 Update lib-vc2019 to use same version as your visual studio
+    message(STATUS "MSVC GLFW path: ${PROJECT_SOURCE_DIR}/build/libs/")
+    set(GLFW_LIB "${PROJECT_SOURCE_DIR}/build/libs/") # 2.1 Update lib-vc2019 to use same version as your visual studio
   elseif (CMAKE_GENERATOR STREQUAL "MinGW Makefiles")
     message(STATUS "USING MINGW")
     set(GLFW_LIB "${GLFW_PATH}/build/src/") # 2.1 make sure matches glfw mingw subdirectory
@@ -50,46 +54,63 @@ else()
   set(GLFW_LIB glfw)
   message(STATUS "Found GLFW")
 endif()
+
 if (NOT GLFW_LIB)
     message(FATAL_ERROR "Could not find glfw library!")
 else()
     message(STATUS "Using glfw lib at: ${GLFW_LIB}")
 endif()
  
-include_directories(External)
+#include_directories(External)
  
 # If TINYOBJ_PATH not specified in .env.cmake, try fetching from git repo
 if (NOT TINYOBJ_PATH)
-  message(STATUS "TINYOBJ_PATH not specified in .env.cmake, using externals/tinyobjloader")
+  message(STATUS "TINYOBJ_PATH not specified in .env.cmake, using Externals/tinyobjloader")
   set(TINYOBJ_PATH Externals/tinyobjloader)
 endif()
  
 # If STB_PATH not specified in .env.cmake, try fetching from git repo
 if (NOT STB_PATH)
-  message(STATUS "STB_PATH not specified in .env.cmake, using externals/stb")
-  set(STB_PATH Externals/tinyobjloader)
+  message(STATUS "STB_PATH not specified in .env.cmake, using Externals/stb")
+  set(STB_PATH Externals/stb)
 endif()
 
-file(GLOB_RECURSE SOURCES ${PROJECT_SOURCE_DIR}/Source/*.cpp)
- 
+file(GLOB_RECURSE SOURCES ${PROJECT_SOURCE_DIR}/Source/*.cpp ${PROJECT_SOURCE_DIR}/Source/*.h)
+
+#set_target_properties(${PROJECT_NAME} PROPERTIES SUFFIX ".so.1")
+#set_target_properties(new_thing PROPERTIES OUTPUT_NAME "better_name")
+
+
 add_executable(${PROJECT_NAME} ${SOURCES})
  
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
  
 set_property(TARGET ${PROJECT_NAME} PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/build")
- 
+
+set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "${PROJECT_NAME}$<$<CONFIG:Debug>:_d>")
+
+set(EXECUTABLE_OUTPUT_PATH  ${PROJECT_SOURCE_DIR}/build)
+
+if ( MSVC )
+    set_target_properties(${PROJECT_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build/$<0:>)
+endif ( MSVC )
+
 if (WIN32)
   message(STATUS "CREATING BUILD FOR WINDOWS")
  
   if (USE_MINGW)
+    message(STATUS "USING USE_MINGW")
     target_include_directories(${PROJECT_NAME} PUBLIC
       ${MINGW_PATH}/include
     )
     target_link_directories(${PROJECT_NAME} PUBLIC
       ${MINGW_PATH}/lib
     )
+    target_link_libraries(${PROJECT_NAME} libglfw3.a vulkan-1)
+  else()
+    target_link_libraries(${PROJECT_NAME} glfw3 vulkan-1)
   endif()
- 
+
   target_include_directories(${PROJECT_NAME} PUBLIC
     ${PROJECT_SOURCE_DIR}/Source
     ${Vulkan_INCLUDE_DIRS}
@@ -98,13 +119,12 @@ if (WIN32)
     ${GLFW_INCLUDE_DIRS}
     ${GLM_PATH}
     )
- 
+
   target_link_directories(${PROJECT_NAME} PUBLIC
-    ${Vulkan_LIBRARIES}
     ${GLFW_LIB}
+    ${Vulkan_LIBRARIES}
   )
- 
-  target_link_libraries(${PROJECT_NAME} libglfw3.a vulkan-1)
+
 elseif (UNIX)
     message(STATUS "CREATING BUILD FOR UNIX")
     target_include_directories(${PROJECT_NAME} PUBLIC
