@@ -85,7 +85,7 @@ target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
  
 set_property(TARGET ${PROJECT_NAME} PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/build")
 
-if (UNIX)
+if (UNIX OR USE_MINGW)
   if (${CMAKE_BUILD_TYPE} STREQUAL Debug)
     set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "${PROJECT_NAME}_d")
   else()

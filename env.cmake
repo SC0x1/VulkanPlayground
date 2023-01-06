@@ -7,4 +7,4 @@ set(STB_PATH Externals/stb)
 # set(VULKAN_SDK_PATH "/path/to/vulkan/sdk")
 
 #Set MINGW_PATH if using mingwBuild.bat and not VisualStudio20XX
-#set(MINGW_PATH "D:/Apps/Toolchains/mingw64")
+set(MINGW_PATH "D:/Apps/Toolchains/mingw64")
