@@ -5,14 +5,10 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "C++ Launch",
+            "name": "Launch Debug",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/VulkanPlayground",
-            //"args": [
-            //    "-pthread",
-            //    "common.c"
-            //],
+            "program": "${workspaceFolder}/build/VulkanPlayground_d",
             "stopAtEntry": true,
             "cwd": "${workspaceFolder}/build",
             "environment": [],
@@ -26,7 +22,35 @@
                 }
             ],
             "windows": {
-                "name": "Launch MinGW build",
+                "name": "Launch MinGW Debug build",
+                "type": "cppdbg",
+                "request": "launch",
+                "program": "${workspaceFolder}/build/VulkanPlayground_d.exe",
+                "MIMode": "gdb",
+                "miDebuggerPath": "gdb"
+            },
+
+            "miDebuggerPath": "/usr/bin/gdb"
+        },
+        {
+            "name": "Launch Release",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/VulkanPlayground",
+            "stopAtEntry": true,
+            "cwd": "${workspaceFolder}/build",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "windows": {
+                "name": "Launch MinGW Release build",
                 "type": "cppdbg",
                 "request": "launch",
                 "program": "${workspaceFolder}/build/VulkanPlayground.exe",

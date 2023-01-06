@@ -25,8 +25,10 @@ if (DEFINED VULKAN_SDK_PATH)
   set(Vulkan_FOUND "True")
 else()
   find_package(Vulkan REQUIRED) # throws error if could not find Vulkan
+  if (WIN32)
+    set(Vulkan_LIBRARIES "$ENV{VULKAN_SDK}/Lib")
+  endif()
   message(STATUS "Found Vulkan (REQUIRED): $ENV{VULKAN_SDK}")
-  set(Vulkan_LIBRARIES "$ENV{VULKAN_SDK}/Lib")
 endif()
 
 if (NOT Vulkan_FOUND)
@@ -77,22 +79,25 @@ endif()
 
 file(GLOB_RECURSE SOURCES ${PROJECT_SOURCE_DIR}/Source/*.cpp ${PROJECT_SOURCE_DIR}/Source/*.h)
 
-#set_target_properties(${PROJECT_NAME} PROPERTIES SUFFIX ".so.1")
-#set_target_properties(new_thing PROPERTIES OUTPUT_NAME "better_name")
-
-
 add_executable(${PROJECT_NAME} ${SOURCES})
  
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
  
 set_property(TARGET ${PROJECT_NAME} PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/build")
 
-set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "${PROJECT_NAME}$<$<CONFIG:Debug>:_d>")
+if (UNIX)
+  if (${CMAKE_BUILD_TYPE} STREQUAL Debug)
+    set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "${PROJECT_NAME}_d")
+  else()
+    set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "${PROJECT_NAME}")
+  endif()
+endif()
 
 set(EXECUTABLE_OUTPUT_PATH  ${PROJECT_SOURCE_DIR}/build)
 
 if ( MSVC )
-    set_target_properties(${PROJECT_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build/$<0:>)
+  set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "${PROJECT_NAME}$<$<CONFIG:Debug>:_d>")
+  set_target_properties(${PROJECT_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build/$<0:>)
 endif ( MSVC )
 
 if (WIN32)
