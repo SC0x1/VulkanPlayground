@@ -3,5 +3,5 @@ mkdir -p build
 cd build
 cmake -S ../ -B . -D CMAKE_BUILD_TYPE=Debug
 cmake --build . --target clean
-make && make Shaders && ./VulkanPlayground
+make && make Shaders
 cd ..

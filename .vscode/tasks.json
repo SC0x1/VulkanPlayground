@@ -2,14 +2,37 @@
     "version": "2.0.0",
     "tasks": [
 		{
-			"label": "build debug",
+			"label": "Cmake Debug",
 			"type": "shell",
-			"command": "./unixBuild.sh",
+			"command": "./build_debug_unix.sh",
 			"windows": {
-				"command": "./mingwBuild.cmd",
+				"command": "./build_debug_mingw.cmd"
+			},
+			"args": [],
+			"group": {
+				"kind": "build",
+				"isDefault" : true
+			},
+			"presentation": {
+				"echo": true,
+				"reveal": "always",
+				"focus": false,
+				"panel": "new",
+				"showReuseMessage": false,
+				"clear": true
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "CMake Release",
+			"type": "shell",
+			"command": "./build_release_unix.sh",
+			"windows": {
+				"command": "./build_release_mingw.cmd"
 			},
 			"args": [],
 			"group": "build",
+
 			"presentation": {
 				"echo": true,
 				"reveal": "always",
