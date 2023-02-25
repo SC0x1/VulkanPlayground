@@ -12,8 +12,8 @@
 #define VKPG_ROOT_DIR "../"
 #endif
 
-const std::string MODEL_PATH = "Models/viking_room.obj";
-const std::string TEXTURE_PATH = "Textures/viking_room.png";
+const std::string MODEL_PATH = "models/viking_room.obj";
+const std::string TEXTURE_PATH = "textures/viking_room.png";
 
 void ReadFile(const std::string& filename, std::vector<char>& buffer)
 {
