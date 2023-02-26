@@ -9,11 +9,14 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/VulkanPlayground_d",
-            "stopAtEntry": true,
+            "args": [],
+            "stopAtEntry": false,
             "cwd": "${workspaceFolder}/build",
             "environment": [],
             "externalConsole": false,
             "MIMode": "gdb",
+            // "miDebuggerPath": "/usr/bin/gdb",
+            "miDebuggerPath": "gdb",
             "setupCommands": [
                 {
                     "description": "Enable pretty-printing for gdb",
@@ -21,23 +24,23 @@
                     "ignoreFailures": true
                 }
             ],
-            "windows": {
-                "name": "Launch MinGW Debug build",
-                "type": "cppdbg",
-                "request": "launch",
-                "program": "${workspaceFolder}/build/VulkanPlayground_d.exe",
-                "MIMode": "gdb",
-                "miDebuggerPath": "gdb"
-            },
-
-            "miDebuggerPath": "/usr/bin/gdb"
+            // "windows": {
+            //     "name": "Launch MinGW Debug build",
+            //     "type": "cppdbg",
+            //     "request": "launch",
+            //     "program": "${workspaceFolder}/build/VulkanPlayground_d.exe",
+            //     "MIMode": "gdb",
+            //     "miDebuggerPath": "gdb" // Assume it is added in the PATH
+            // },
+            "logging": { "engineLogging": true }, //optional
+            //"preLaunchTask": "Build Cmake Debug"
         },
         {
             "name": "Launch Release",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/VulkanPlayground",
-            "stopAtEntry": true,
+            "stopAtEntry": false,
             "cwd": "${workspaceFolder}/build",
             "environment": [],
             "externalConsole": false,

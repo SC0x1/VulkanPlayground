@@ -152,7 +152,10 @@ _DESIGN/
 #Images
 *.tga
 !*.PNG
+
+#Complier temp files
 /x64/Debug/*
-/Temp/Debug
+/Temp/*
 /build/*
 
+/out/*

@@ -1,6 +1,6 @@
 if not exist build mkdir build
 cd build
-cmake -S ../ -B . -G "MinGW Makefiles" -D CMAKE_BUILD_TYPE=Debug
-cmake --build . --target clean
-mingw32-make.exe && mingw32-make.exe Shaders
+cmake -S ../ -B . -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Debug
+cmake --build . --config Debug --target clean
+mingw32-make.exe -j5 && mingw32-make.exe Shaders
 cd ..
