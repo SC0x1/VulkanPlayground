@@ -167,8 +167,11 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="compile_shaders.bat" />
-    <None Include="Shaders\shader.frag" />
-    <None Include="Shaders\shader.vert" />
+    <None Include="Shaders\shader_compute.comp" />
+    <None Include="Shaders\shader_compute.frag" />
+    <None Include="Shaders\shader_compute.vert" />
+    <None Include="Shaders\shader_main.frag" />
+    <None Include="Shaders\shader_main.vert" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

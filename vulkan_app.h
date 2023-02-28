@@ -89,6 +89,40 @@ struct Vertex
     }
 };
 
+struct Particle
+{
+    glm::vec2 position;
+    glm::vec2 velocity;
+    glm::vec4 color;
+
+    static VkVertexInputBindingDescription GetBindingDescription()
+    {
+        VkVertexInputBindingDescription bindingDescription{};
+        bindingDescription.binding = 0;
+        bindingDescription.stride = sizeof(Particle);
+        bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+        return bindingDescription;
+    }
+
+    static std::array<VkVertexInputAttributeDescription, 2> GetAttributeDescriptions()
+    {
+        std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
+
+        attributeDescriptions[0].binding = 0;
+        attributeDescriptions[0].location = 0;
+        attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
+        attributeDescriptions[0].offset = offsetof(Particle, position);
+
+        attributeDescriptions[1].binding = 0;
+        attributeDescriptions[1].location = 1;
+        attributeDescriptions[1].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+        attributeDescriptions[1].offset = offsetof(Particle, color);
+
+        return attributeDescriptions;
+    }
+};
+
 namespace std
 {
     template<> struct hash<Vertex>
@@ -124,19 +158,17 @@ namespace std
 
 struct UniformBufferObject
 {
-    alignas(16) glm::mat4 model;
-    alignas(16) glm::mat4 view;
-    alignas(16) glm::mat4 proj;
+    float deltaTime = 1.0f;
 };
 
 struct QueueFamilyIndices
 {
-    std::optional<uint32_t> graphicsFamily;
+    std::optional<uint32_t> graphicsAndComputeFamily;
     std::optional<uint32_t> presentFamily;
 
     bool IsComplete() const
     {
-        return graphicsFamily.has_value() && presentFamily.has_value();
+        return graphicsAndComputeFamily.has_value() && presentFamily.has_value();
     }
 };
 
@@ -147,7 +179,7 @@ struct SwapChainSupportDetails
     std::vector<VkPresentModeKHR> presentModes;
 };
 
-class HelloTriangleApplication
+class VulkanApplication
 {
 public:
 
@@ -175,24 +207,27 @@ private:
     void CleanupSwapChain();
     void CreateImageViews();
     void CreateRenderPass();
-    void CreateDescriptorSetLayout();
+    void CreateComputeDescriptorSetLayout();
+
     void CreateGraphicsPipeline();
+    void CreateComputePipeline();
+
     void CreateFramebuffers();
     void CreateCommandPool();
-    void CreateColorResources(); // MSAA image
-    void CreateDepthResources(); // Depth image
-    void CreateTextureImage();
-    void CreateTextureImageView();
-    void CreateTextureSampler();
-    void CreateVertexBuffer();
-    void CreateIndexBuffer();
+
+    void CreateShaderStorageBuffers();
+
     void CreateUniformBuffers();
+
     void CreateDescriptorPool();
-    void CreateDescriptorSets();
+
+    void CreateComputeDescriptorSets();
     void CreateCommandBuffers();
+    void CreateComputeCommandBuffers();
     void CreateSyncObjects();
 
     void RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) const;
+    void RecordComputeCommandBuffer(VkCommandBuffer commandBuffer) const;
 
     VkCommandBuffer BeginSingleTimeCommands();
     void EndSingleTimeCommands(VkCommandBuffer commandBuffer);
@@ -211,9 +246,6 @@ private:
     VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes) const;
     VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities) const;
     SwapChainSupportDetails QuerySwapChainSupport(VkPhysicalDevice device) const;
-
-    // MSAA
-    VkSampleCountFlagBits GetMaxUsableSampleCount() const;
 
     int RateDeviceSuitability(VkPhysicalDevice device) const;
 
@@ -245,8 +277,6 @@ private:
 
     static void FramebufferResizeCallback(GLFWwindow* window, int width, int height);
 
-    void LoadModel();
-
 private:
     const int MAX_FRAMES_IN_FLIGHT = 2;
 
@@ -255,6 +285,8 @@ private:
     // glfwGetFramebufferSize to query the resolution of the window in pixel
     const uint32_t WIDTH = 800;
     const uint32_t HEIGHT = 600;
+
+    const uint32_t PARTICLE_COUNT = 8192;
 
     GLFWwindow* m_Window = nullptr;
 
@@ -266,6 +298,7 @@ private:
     VkPhysicalDevice m_PhysicalDevice = VK_NULL_HANDLE; // A Physical device
     VkDevice m_Device;                                  // A Logical device
     VkQueue m_GraphicsQueue;                            // Device queues are implicitly cleaned up when the device is destroyed
+    VkQueue m_ComputeQueue;                             // Device queues are implicitly cleaned up when the device is destroyed
     VkQueue m_PresentQueue;
 
     // Swap chain
@@ -277,56 +310,42 @@ private:
     VkFormat m_SwapChainImageFormat;
     VkExtent2D m_SwapChainExtent;
 
-    // Pipeline
+    // Pipelines
     VkRenderPass m_RenderPass;
-    VkDescriptorSetLayout m_DescriptorSetLayout; // UBO
     VkPipelineLayout m_PipelineLayout;
     VkPipeline m_GraphicsPipeline;
 
+    VkDescriptorSetLayout m_ComputeDescriptorSetLayout;
+    VkPipelineLayout m_ComputePipelineLayout;
+    VkPipeline m_ComputePipeline;
+
     VkCommandPool m_CommandPool;
+
     VkDescriptorPool m_DescriptorPool;
-    std::vector<VkDescriptorSet> m_DescriptorSets;
-
-    // Mesh data
-    std::vector<Vertex> m_Vertices;
-    std::vector<uint32_t> m_Indices;
-
-    VkBuffer m_VertexBuffer;
-    VkDeviceMemory m_VertexBufferMemory;
-    VkBuffer m_IndexBuffer;
-    VkDeviceMemory m_IndexBufferMemory;
+    std::vector<VkDescriptorSet> m_ComputeDescriptorSets;
 
     std::vector<VkBuffer> m_UniformBuffers;
     std::vector<VkDeviceMemory> m_UniformBuffersMemory;
     std::vector<void*> m_UniformBuffersMapped;
 
-    // Depth
-    VkImage m_DepthImage;
-    VkDeviceMemory m_DepthImageMemory;
-    VkImageView m_DepthImageView;
-
-    // Mipmaps
-    uint32_t m_MipLevels;
-
-    // Texture
-    VkImage m_TextureImage;
-    VkDeviceMemory m_TextureImageMemory;
-    VkImageView m_TextureImageView;
-    VkSampler m_TextureSampler;
-
-    // MSAA
-    VkSampleCountFlagBits m_MsaaSamples = VK_SAMPLE_COUNT_1_BIT;
-    VkImage m_ColorImage;
-    VkDeviceMemory m_ColorImageMemory;
-    VkImageView m_ColorImageView;
+    // Shader storage buffer
+    std::vector<VkBuffer> m_ShaderStorageBuffers;
+    std::vector<VkDeviceMemory> m_ShaderStorageBuffersMemory;
 
     std::vector<VkCommandBuffer> m_CommandBuffers;
+    std::vector<VkCommandBuffer> m_ComputeCommandBuffers;
 
     std::vector<VkSemaphore> m_ImageAvailableSemaphores;
     std::vector<VkSemaphore> m_RenderFinishedSemaphores;
+    std::vector<VkSemaphore> m_ComputeFinishedSemaphores;
+
     std::vector<VkFence> m_InFlightFences;
+    std::vector<VkFence> m_ComputeInFlightFences;
 
     uint32_t m_CurrentFrameIdx = 0;
+
+    float m_LastFrameTime = 0.0f;
+    double m_LastTime = 0.0f;
 
     const std::vector<const char*> m_ValidationLayers =
     {

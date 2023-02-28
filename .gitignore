@@ -40,6 +40,7 @@
 
 # Script files
 !*.bat
+!*.cmd
 !*.sh
 !*.pl
 !*.py
@@ -122,29 +123,29 @@ ipch/
 *.VC.opendb
 
 # Project files
-Binaries/*
-Intermediate/*
-Externals/*
+binaries/*
+intermediate/*
+externals/*
 
 # Exclude submodules
-!/Externals/fmt
-!/Externals/bstrlib
-!/Externals/glm
-!/Externals/glfw
-!/Externals/imgui
-!/Externals/stblib
-!/Externals/turf
-!/Externals/assimp
-!/Externals/stb
-!/Externals/tinyobjloader
+!/externals/fmt
+!/externals/bstrlib
+!/externals/glm
+!/externals/glfw
+!/externals/imgui
+!/externals/stblib
+!/externals/turf
+!/externals/assimp
+!/externals/stb
+!/externals/tinyobjloader
 
 Data/*
 !/Data/Screenshots/
 !/Data/Shaders
 !/Data/Scripts
 
-!/Models/viking_room.obj
-!/Textures/
+!/models/viking_room.obj
+!/textures/
 
 _DESIGN/
 
@@ -153,3 +154,7 @@ _DESIGN/
 !*.PNG
 /x64/Debug/*
 /Temp/Debug
+/build/*
+
+/out/
+

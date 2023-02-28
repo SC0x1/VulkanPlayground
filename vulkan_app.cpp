@@ -1,6 +1,7 @@
 #include "vulkan_app.h"
 
 #include <chrono>
+#include <random>
 #include <thread>
 #include <fstream>
 #include <unordered_map>
@@ -96,7 +97,7 @@ void ReadFile(const std::string& filename, std::vector<char>& buffer)
     file.close();
 }
 
-void HelloTriangleApplication::Run()
+void VulkanApplication::Run()
 {
     InitWindow();
 
@@ -107,7 +108,7 @@ void HelloTriangleApplication::Run()
     Cleanup();
 }
 
-void HelloTriangleApplication::InitVulkan()
+void VulkanApplication::InitVulkan()
 {
     CreateInstance();
     SetupDebugMessenger();
@@ -117,33 +118,35 @@ void HelloTriangleApplication::InitVulkan()
     CreateSwapChain();
     CreateImageViews();
     CreateRenderPass();
-    CreateDescriptorSetLayout();
+
+    CreateComputeDescriptorSetLayout();
+
     CreateGraphicsPipeline();
-    CreateCommandPool();
-    CreateColorResources();
-    CreateDepthResources();
+    CreateComputePipeline();
     CreateFramebuffers();
-    CreateTextureImage();
-    CreateTextureImageView();
-    CreateTextureSampler();
 
-    LoadModel();
-
-    CreateVertexBuffer();
-    CreateIndexBuffer();
+    CreateCommandPool();
+    CreateShaderStorageBuffers();
     CreateUniformBuffers();
     CreateDescriptorPool();
-    CreateDescriptorSets();
+    CreateComputeDescriptorSets();
     CreateCommandBuffers();
+    CreateComputeCommandBuffers();
     CreateSyncObjects();
 }
 
-void HelloTriangleApplication::MainLoop()
+void VulkanApplication::MainLoop()
 {
     while (!glfwWindowShouldClose(m_Window))
     {
         glfwPollEvents();
         DrawFrame();
+
+        // We want to animate the particle system using the last frames time to get smooth,
+        // frame-rate independent animation
+        const double currentTime = glfwGetTime();
+        m_LastFrameTime = (currentTime - m_LastTime) * 1000.0f;
+        m_LastTime = currentTime;
 
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
@@ -151,17 +154,25 @@ void HelloTriangleApplication::MainLoop()
     vkDeviceWaitIdle(m_Device);
 }
 
-void HelloTriangleApplication::Cleanup()
+void VulkanApplication::Cleanup()
 {
     //Vulkan
     {
         CleanupSwapChain();
 
-        vkDestroySampler(m_Device, m_TextureSampler, nullptr);
-        vkDestroyImageView(m_Device, m_TextureImageView, nullptr);
+        vkDestroyPipeline(m_Device, m_GraphicsPipeline, nullptr);
+        vkDestroyPipelineLayout(m_Device, m_PipelineLayout, nullptr);
 
-        vkDestroyImage(m_Device, m_TextureImage, nullptr);
-        vkFreeMemory(m_Device, m_TextureImageMemory, nullptr);
+        vkDestroyPipeline(m_Device, m_ComputePipeline, nullptr);
+        vkDestroyPipelineLayout(m_Device, m_ComputePipelineLayout, nullptr);
+
+        vkDestroyRenderPass(m_Device, m_RenderPass, nullptr);
+
+        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+        {
+            vkDestroyBuffer(m_Device, m_ShaderStorageBuffers[i], nullptr);
+            vkFreeMemory(m_Device, m_ShaderStorageBuffersMemory[i], nullptr);
+        }
 
         for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
         {
@@ -170,25 +181,18 @@ void HelloTriangleApplication::Cleanup()
         }
 
         vkDestroyDescriptorPool(m_Device, m_DescriptorPool, nullptr);
-        vkDestroyDescriptorSetLayout(m_Device, m_DescriptorSetLayout, nullptr);
 
-        vkDestroyBuffer(m_Device, m_IndexBuffer, nullptr);
-        vkFreeMemory(m_Device, m_IndexBufferMemory, nullptr);
-
-        vkDestroyBuffer(m_Device, m_VertexBuffer, nullptr);
-        vkFreeMemory(m_Device, m_VertexBufferMemory, nullptr);
-
-        vkDestroyPipeline(m_Device, m_GraphicsPipeline, nullptr);
-        vkDestroyPipelineLayout(m_Device, m_PipelineLayout, nullptr);
-
-        vkDestroyRenderPass(m_Device, m_RenderPass, nullptr);
+        vkDestroyDescriptorSetLayout(m_Device, m_ComputeDescriptorSetLayout, nullptr);
 
         // should be cleaned onto the main drawing function!
         for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
         {
             vkDestroySemaphore(m_Device, m_ImageAvailableSemaphores[i], nullptr);
             vkDestroySemaphore(m_Device, m_RenderFinishedSemaphores[i], nullptr);
+            vkDestroySemaphore(m_Device, m_ComputeFinishedSemaphores[i], nullptr);
+
             vkDestroyFence(m_Device, m_InFlightFences[i], nullptr);
+            vkDestroyFence(m_Device, m_ComputeInFlightFences[i], nullptr);
         }
 
         // when the command pool is freed, the command buffers are also freed
@@ -211,7 +215,7 @@ void HelloTriangleApplication::Cleanup()
     glfwTerminate();
 }
 
-void HelloTriangleApplication::InitWindow()
+void VulkanApplication::InitWindow()
 {
     glfwInit();
 
@@ -224,7 +228,7 @@ void HelloTriangleApplication::InitWindow()
     glfwSetFramebufferSizeCallback(m_Window, FramebufferResizeCallback);
 }
 
-void HelloTriangleApplication::CreateInstance()
+void VulkanApplication::CreateInstance()
 {
     if (m_EnableValidationLayers && !CheckValidationLayerSupport())
     {
@@ -233,7 +237,7 @@ void HelloTriangleApplication::CreateInstance()
 
     VkApplicationInfo appInfo{};
     appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-    appInfo.pApplicationName = "Hello Triangle";
+    appInfo.pApplicationName = "Vulkan Compute Application";
     appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
     appInfo.pEngineName = "No Engine";
     appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
@@ -282,7 +286,7 @@ void HelloTriangleApplication::CreateInstance()
     }
 }
 
-void HelloTriangleApplication::CreateSurface()
+void VulkanApplication::CreateSurface()
 {
     // Platform specific creation of the surface
     /* 
@@ -303,7 +307,7 @@ void HelloTriangleApplication::CreateSurface()
     }
 }
 
-void HelloTriangleApplication::SetupDebugMessenger()
+void VulkanApplication::SetupDebugMessenger()
 {
     if (!m_EnableValidationLayers)
     {
@@ -319,7 +323,7 @@ void HelloTriangleApplication::SetupDebugMessenger()
     }
 }
 
-void HelloTriangleApplication::PickPhysicalDevice()
+void VulkanApplication::PickPhysicalDevice()
 {
     uint32_t deviceCount = 0;
     vkEnumeratePhysicalDevices(m_Instance, &deviceCount, nullptr);
@@ -340,13 +344,10 @@ void HelloTriangleApplication::PickPhysicalDevice()
         candidates.insert(std::make_pair(score, device));
     }
 
-
     // Check if the best candidate is suitable at all
     if (candidates.rbegin()->first > 0)
     {
         m_PhysicalDevice = candidates.rbegin()->second;
-
-        m_MsaaSamples = GetMaxUsableSampleCount();
     }
     else
     {
@@ -359,12 +360,12 @@ void HelloTriangleApplication::PickPhysicalDevice()
     }
 }
 
-void HelloTriangleApplication::CreateLogicalDevice()
+void VulkanApplication::CreateLogicalDevice()
 {
     QueueFamilyIndices indices = FindQueueFamilies(m_PhysicalDevice);
 
     std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
-    std::set<uint32_t> uniqueQueueFamilies = { indices.graphicsFamily.value(), indices.presentFamily.value() };
+    std::set<uint32_t> uniqueQueueFamilies = { indices.graphicsAndComputeFamily.value(), indices.presentFamily.value() };
 
     float queuePriority = 1.0f;
     for (uint32_t queueFamily : uniqueQueueFamilies)
@@ -414,11 +415,12 @@ void HelloTriangleApplication::CreateLogicalDevice()
         throw std::runtime_error("failed to create logical device!");
     }
 
-    vkGetDeviceQueue(m_Device, indices.graphicsFamily.value(), 0, &m_GraphicsQueue);
+    vkGetDeviceQueue(m_Device, indices.graphicsAndComputeFamily.value(), 0, &m_GraphicsQueue);
+    vkGetDeviceQueue(m_Device, indices.graphicsAndComputeFamily.value(), 0, &m_ComputeQueue);
     vkGetDeviceQueue(m_Device, indices.presentFamily.value(), 0, &m_PresentQueue);
 }
 
-void HelloTriangleApplication::CreateSwapChain()
+void VulkanApplication::CreateSwapChain()
 {
     const SwapChainSupportDetails swapChainSupport = QuerySwapChainSupport(m_PhysicalDevice);
 
@@ -457,9 +459,9 @@ void HelloTriangleApplication::CreateSwapChain()
     createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
     
     const QueueFamilyIndices indices = FindQueueFamilies(m_PhysicalDevice);
-    const uint32_t queueFamilyIndices[] = { indices.graphicsFamily.value(), indices.presentFamily.value() };
+    const uint32_t queueFamilyIndices[] = { indices.graphicsAndComputeFamily.value(), indices.presentFamily.value() };
 
-    if (indices.graphicsFamily != indices.presentFamily)
+    if (indices.graphicsAndComputeFamily != indices.presentFamily)
     {
         // VK_SHARING_MODE_CONCURRENT
         // Images can be used across multiple queue families without explicit ownership transfers.
@@ -515,7 +517,7 @@ void HelloTriangleApplication::CreateSwapChain()
     */
 }
 
-void HelloTriangleApplication::RecreateSwapChain()
+void VulkanApplication::RecreateSwapChain()
 {
     int width = 0, height = 0;
     while (width == 0 || height == 0)
@@ -535,10 +537,6 @@ void HelloTriangleApplication::RecreateSwapChain()
     // The image views need to be recreated because they are based directly on the swap chain images.
     CreateImageViews();
 
-    CreateColorResources();
-
-    CreateDepthResources();
-
     // The framebuffers directly depend on the swap chain images, and thus must be recreated as well.
     CreateFramebuffers();
 
@@ -550,18 +548,8 @@ void HelloTriangleApplication::RecreateSwapChain()
     */
 }
 
-void HelloTriangleApplication::CleanupSwapChain()
+void VulkanApplication::CleanupSwapChain()
 {
-    // Cleanup Color image MSAA
-    vkDestroyImageView(m_Device, m_ColorImageView, nullptr);
-    vkDestroyImage(m_Device, m_ColorImage, nullptr);
-    vkFreeMemory(m_Device, m_ColorImageMemory, nullptr);
-
-    // Cleanup Depth
-    vkDestroyImageView(m_Device, m_DepthImageView, nullptr);
-    vkDestroyImage(m_Device, m_DepthImage, nullptr);
-    vkFreeMemory(m_Device, m_DepthImageMemory, nullptr);
-
     for (size_t i = 0; i < m_SwapChainFramebuffers.size(); i++)
     {
         vkDestroyFramebuffer(m_Device, m_SwapChainFramebuffers[i], nullptr);
@@ -575,7 +563,7 @@ void HelloTriangleApplication::CleanupSwapChain()
     vkDestroySwapchainKHR(m_Device, m_SwapChain, nullptr);
 }
 
-void HelloTriangleApplication::CreateImageViews()
+void VulkanApplication::CreateImageViews()
 {
     m_SwapChainImageViews.resize(m_SwapChainImages.size());
 
@@ -585,140 +573,39 @@ void HelloTriangleApplication::CreateImageViews()
     }
 }
 
-void HelloTriangleApplication::CreateRenderPass()
+void VulkanApplication::CreateRenderPass()
 {
     VkAttachmentDescription colorAttachment{};
-    // The format of the color attachment should match the format of the swap chain images
     colorAttachment.format = m_SwapChainImageFormat;
-    colorAttachment.samples = m_MsaaSamples;
+    colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
     colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    /*
-    The loadOp and storeOp determine what to do with the data in the attachment before rendering and after rendering.
-    We have the following choices for loadOp:
-        VK_ATTACHMENT_LOAD_OP_LOAD: Preserve the existing contents of the attachment
-        VK_ATTACHMENT_LOAD_OP_CLEAR: Clear the values to a constant at the start
-        VK_ATTACHMENT_LOAD_OP_DONT_CARE: Existing contents are undefined; we don't care about them
-    
-    In our case we're going to use the clear operation to clear the framebuffer to black before drawing a new frame.
-    
-    There are only two possibilities for the storeOp:
-        VK_ATTACHMENT_STORE_OP_STORE: Rendered contents will be stored in memory and can be read later
-        VK_ATTACHMENT_STORE_OP_DONT_CARE: Contents of the framebuffer will be undefined after the rendering operation
-    */
     colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    /*
-    The loadOp and storeOp apply to color and depth data, and stencilLoadOp / stencilStoreOp apply to stencil data.
-    Our application won't do anything with the stencil buffer, so the results of loading and storing are irrelevant.
-    */
     colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    colorAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    /*
-    Some of the most common layouts are:
-        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL: Images used as color attachment
-        VK_IMAGE_LAYOUT_PRESENT_SRC_KHR: Images to be presented in the swap chain
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL: Images to be used as destination for a memory copy operation
-
-    The initialLayout specifies which layout the image will have before the render pass begins.
-    The finalLayout specifies the layout to automatically transition to when the render pass finishes.
-    Using VK_IMAGE_LAYOUT_UNDEFINED for initialLayout means that we don't care what previous layout the image was in.
-    */
+    colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
     VkAttachmentReference colorAttachmentRef{};
     colorAttachmentRef.attachment = 0;
     colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    /*
-    The attachment parameter specifies which attachment to reference by its index
-    in the attachment descriptions array. Our array consists of a single VkAttachmentDescription,
-    so its index is 0. The layout specifies which layout we would like the attachment to have during
-    a subpass that uses this reference
-    */
-
-    // MSAA
-    VkAttachmentDescription colorAttachmentResolve{};
-    colorAttachmentResolve.format = m_SwapChainImageFormat;
-    colorAttachmentResolve.samples = VK_SAMPLE_COUNT_1_BIT;
-    colorAttachmentResolve.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    colorAttachmentResolve.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    colorAttachmentResolve.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    colorAttachmentResolve.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    colorAttachmentResolve.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    colorAttachmentResolve.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-
-    VkAttachmentReference colorAttachmentResolveRef{};
-    colorAttachmentResolveRef.attachment = 2;
-    colorAttachmentResolveRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-    // Depth Attachment
-    VkAttachmentDescription depthAttachment{};
-    depthAttachment.format = FindDepthFormat(); // The format should be the same as the depth image itself
-    depthAttachment.samples = m_MsaaSamples;
-    depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-    /*
-    This time we don't care about storing the depth data (storeOp), because it will not be used after drawing has finished.
-    This may allow the hardware to perform additional optimizations. Just like the color buffer, we don't care about the previous depth contents,
-    so we can use VK_IMAGE_LAYOUT_UNDEFINED as initialLayout.
-    */
-
-    VkAttachmentReference depthAttachmentRef{};
-    depthAttachmentRef.attachment = 1;
-    depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
     VkSubpassDescription subpass{};
     subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
     subpass.colorAttachmentCount = 1;
     subpass.pColorAttachments = &colorAttachmentRef;
-    subpass.pResolveAttachments = &colorAttachmentResolveRef;
-    subpass.pDepthStencilAttachment = &depthAttachmentRef;
-    // Unlike color attachments, a subpass can only use a single depth (+stencil) attachment.
-
-    /*
-    The index of the attachment in this array is directly referenced from the fragment shader with the
-        layout(location = 0) out vec4 outColor directive!
-
-    The following other types of attachments can be referenced by a subpass:
-        pInputAttachments: Attachments that are read from a shader
-        pResolveAttachments: Attachments used for multisampling color attachments
-        pDepthStencilAttachment: Attachment for depth and stencil data
-        pPreserveAttachments: Attachments that are not used by this subpass, but for which the data must be preserved
-    */
 
     VkSubpassDependency dependency{};
     dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
     dependency.dstSubpass = 0;
-    /*
-    The first two fields specify the indices of the dependency and the dependent subpass.
-    The special value VK_SUBPASS_EXTERNAL refers to the implicit subpass before or after the render pass
-    depending on whether it is specified in srcSubpass or dstSubpass. The index 0 refers to our subpass,
-    which is the first and only one. The dstSubpass must always be higher than srcSubpass to prevent cycles
-    in the dependency graph (unless one of the subpasses is VK_SUBPASS_EXTERNAL).
-    */
-    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     dependency.srcAccessMask = 0;
-    /*
-    The next two fields specify the operations to wait on and the stages in which these operations occur.
-    We need to wait for the swap chain to finish reading from the image before we can access it.
-    This can be accomplished by waiting on the color attachment output stage itself.
-    */
-    dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-    /*
-    The operations that should wait on this are in the color attachment stage and involve the writing of the color attachment.
-    The depth image is first accessed in the early fragment test pipeline stage and because we have a load operation that clears,
-    we should specify the access mask for writes.
-    */
+    dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 
-    std::array<VkAttachmentDescription, 3> attachments = { colorAttachment, depthAttachment, colorAttachmentResolve };
     VkRenderPassCreateInfo renderPassInfo{};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-    renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-    renderPassInfo.pAttachments = attachments.data();
+    renderPassInfo.attachmentCount = 1;
+    renderPassInfo.pAttachments = &colorAttachment;
     renderPassInfo.subpassCount = 1;
     renderPassInfo.pSubpasses = &subpass;
     renderPassInfo.dependencyCount = 1;
@@ -730,47 +617,57 @@ void HelloTriangleApplication::CreateRenderPass()
     }
 }
 
-void HelloTriangleApplication::CreateDescriptorSetLayout()
+void VulkanApplication::CreateComputeDescriptorSetLayout()
 {
-    // Sampler
-    VkDescriptorSetLayoutBinding samplerLayoutBinding{};
-    samplerLayoutBinding.binding = 1;
-    samplerLayoutBinding.descriptorCount = 1;
-    samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    samplerLayoutBinding.pImmutableSamplers = nullptr;
-    samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    std::array<VkDescriptorSetLayoutBinding, 3> layoutBindings{};
+    layoutBindings[0].binding = 0;
+    layoutBindings[0].descriptorCount = 1;
+    layoutBindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    layoutBindings[0].pImmutableSamplers = nullptr;
+    layoutBindings[0].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
     /*
-    It is possible to use texture sampling in the vertex shader,
-    for example to dynamically deform a grid of vertices by a heightmap.
+        Note that you can combine shader stages here, so if you want the descriptor to be accessible
+        from the vertex and compute stage, e.g. for a uniform buffer with parameters shared across them,
+        you simply set the bits for both stages
+        layoutBindings[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
     */
 
-    // UBO 
-    VkDescriptorSetLayoutBinding uboLayoutBinding{};
-    uboLayoutBinding.binding = 0;
-    uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    uboLayoutBinding.descriptorCount = 1;
-    uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-    uboLayoutBinding.pImmutableSamplers = nullptr; // Optional
+    layoutBindings[1].binding = 1;
+    layoutBindings[1].descriptorCount = 1;
+    layoutBindings[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    layoutBindings[1].pImmutableSamplers = nullptr;
+    layoutBindings[1].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
-    std::array<VkDescriptorSetLayoutBinding, 2> bindings = { uboLayoutBinding, samplerLayoutBinding };
-    
+    layoutBindings[2].binding = 2;
+    layoutBindings[2].descriptorCount = 1;
+    layoutBindings[2].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    layoutBindings[2].pImmutableSamplers = nullptr;
+    layoutBindings[2].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());;
-    layoutInfo.pBindings = bindings.data();
+    layoutInfo.bindingCount = 3;
+    layoutInfo.pBindings = layoutBindings.data();
 
-    if (vkCreateDescriptorSetLayout(m_Device, &layoutInfo, nullptr, &m_DescriptorSetLayout) != VK_SUCCESS)
+    if (vkCreateDescriptorSetLayout(m_Device, &layoutInfo, nullptr, &m_ComputeDescriptorSetLayout) != VK_SUCCESS)
     {
-        throw std::runtime_error("failed to create descriptor set layout!");
+        throw std::runtime_error("failed to create compute descriptor set layout!");
     }
+    /*
+        Looking at this setup, you might wonder why we have two layout bindings for shader storage buffer objects,
+        even though we'll only render a single particle system.
+        This is because the particle positions are updated frame by frame based on a delta time.
+        This means that each frame needs to know about the last frames' particle positions,
+        so it can update them with a new delta time and write them to it's own SSBO
+    */
 }
 
-void HelloTriangleApplication::CreateGraphicsPipeline()
+void VulkanApplication::CreateGraphicsPipeline()
 {
     std::vector<char> vertShaderCode;
-    ReadFile("shaders/vert.spv", vertShaderCode);
+    ReadFile("shaders/compute_vert.spv", vertShaderCode);
     std::vector<char>  fragShaderCode;
-    ReadFile("shaders/frag.spv", fragShaderCode);
+    ReadFile("shaders/compute_frag.spv", fragShaderCode);
 
     const VkShaderModule vertShaderModule = CreateShaderModule(vertShaderCode);
     const VkShaderModule fragShaderModule = CreateShaderModule(fragShaderCode);
@@ -794,8 +691,8 @@ void HelloTriangleApplication::CreateGraphicsPipeline()
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 
-    auto bindingDescription = Vertex::GetBindingDescription();
-    auto attributeDescriptions = Vertex::GetAttributeDescriptions();
+    auto bindingDescription = Particle::GetBindingDescription();
+    auto attributeDescriptions = Particle::GetAttributeDescriptions();
 
     vertexInputInfo.vertexBindingDescriptionCount = 1;
     vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
@@ -804,8 +701,9 @@ void HelloTriangleApplication::CreateGraphicsPipeline()
 
     VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
     inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-    inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
     inputAssembly.primitiveRestartEnable = VK_FALSE;
+
     //////////////////////////////////////////////////////////////////////////
     // Viewports and scissors
     VkViewport viewport{};
@@ -877,49 +775,45 @@ void HelloTriangleApplication::CreateGraphicsPipeline()
     // Multisampling
     VkPipelineMultisampleStateCreateInfo multisampling{};
     multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-    multisampling.sampleShadingEnable = VK_TRUE; // enable sample shading in the pipeline
-    multisampling.rasterizationSamples = m_MsaaSamples;
-    multisampling.minSampleShading = .2f; // min fraction for sample shading; closer to one is smoother
-    multisampling.pSampleMask = nullptr; // Optional
-    multisampling.alphaToCoverageEnable = VK_FALSE; // Optional
-    multisampling.alphaToOneEnable = VK_FALSE; // Optional
-    multisampling.sampleShadingEnable = VK_TRUE; 
+    multisampling.sampleShadingEnable = VK_FALSE; // enable sample shading in the pipeline
+    multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT; // m_MsaaSamples;
 
     //////////////////////////////////////////////////////////////////////////
     // Depth stencil
-    VkPipelineDepthStencilStateCreateInfo depthStencil{};
-    {
-        depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-        depthStencil.depthTestEnable = VK_TRUE;  // field specifies if the depth of new fragments should be compared to the depth buffer to see if they should be discarded
-        depthStencil.depthWriteEnable = VK_TRUE; // field specifies if the new depth of fragments that pass the depth test should actually be written to the depth buffer
-        depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
-        /*
-        depthCompareOp field specifies the comparison that is performed to keep or discard fragments.
-        We're sticking to the convention of lower depth = closer, so the depth of new fragments should be less.
-        */
-        depthStencil.depthBoundsTestEnable = VK_FALSE;
-        depthStencil.minDepthBounds = 0.0f; // Optional
-        depthStencil.maxDepthBounds = 1.0f; // Optional
-        /*
-        The depthBoundsTestEnable, minDepthBounds and maxDepthBounds fields are used for the optional depth bound test.
-        Basically, this allows you to only keep fragments that fall within the specified depth range.
-        */
-        depthStencil.stencilTestEnable = VK_FALSE;
-        depthStencil.front = {}; // Optional
-        depthStencil.back = {}; // Optional
-    }
+    //VkPipelineDepthStencilStateCreateInfo depthStencil{};
+    //{
+    //    depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    //    depthStencil.depthTestEnable = VK_TRUE;  // field specifies if the depth of new fragments should be compared to the depth buffer to see if they should be discarded
+    //    depthStencil.depthWriteEnable = VK_TRUE; // field specifies if the new depth of fragments that pass the depth test should actually be written to the depth buffer
+    //    depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
+    //    /*
+    //    depthCompareOp field specifies the comparison that is performed to keep or discard fragments.
+    //    We're sticking to the convention of lower depth = closer, so the depth of new fragments should be less.
+    //    */
+    //    depthStencil.depthBoundsTestEnable = VK_FALSE;
+    //    depthStencil.minDepthBounds = 0.0f; // Optional
+    //    depthStencil.maxDepthBounds = 1.0f; // Optional
+    //    /*
+    //    The depthBoundsTestEnable, minDepthBounds and maxDepthBounds fields are used for the optional depth bound test.
+    //    Basically, this allows you to only keep fragments that fall within the specified depth range.
+    //    */
+    //    depthStencil.stencilTestEnable = VK_FALSE;
+    //    depthStencil.front = {}; // Optional
+    //    depthStencil.back = {}; // Optional
+    //}
 
     //////////////////////////////////////////////////////////////////////////
     // Color blending
     VkPipelineColorBlendAttachmentState colorBlendAttachment{};
     colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-    colorBlendAttachment.blendEnable = VK_FALSE;
-    colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
-    colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
-    colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD; // Optional
-    colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
-    colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
-    colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD; // Optional
+    colorBlendAttachment.blendEnable = VK_TRUE;
+    colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
+    colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+    colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+    colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+
     /*
     This per-framebuffer struct allows you to configure the first way of color blending. The operations that will be performed are best demonstrated using the following pseudocode:
 
@@ -969,8 +863,8 @@ void HelloTriangleApplication::CreateGraphicsPipeline()
     // Pipeline layout
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipelineLayoutInfo.setLayoutCount = 1; // Optional
-    pipelineLayoutInfo.pSetLayouts = &m_DescriptorSetLayout; // Optional
+    pipelineLayoutInfo.setLayoutCount = 0;
+    pipelineLayoutInfo.pSetLayouts = nullptr;
     pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
     pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
     /*
@@ -993,7 +887,7 @@ void HelloTriangleApplication::CreateGraphicsPipeline()
     pipelineInfo.pViewportState = &viewportState;
     pipelineInfo.pRasterizationState = &rasterizer;
     pipelineInfo.pMultisampleState = &multisampling;
-    pipelineInfo.pDepthStencilState = &depthStencil;
+    //pipelineInfo.pDepthStencilState = &depthStencil;
     pipelineInfo.pColorBlendState = &colorBlending;
     pipelineInfo.pDynamicState = &dynamicState;
 
@@ -1014,7 +908,6 @@ void HelloTriangleApplication::CreateGraphicsPipeline()
     to be created by index with basePipelineIndex. 
     */
 
-            
     if (vkCreateGraphicsPipelines(m_Device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_GraphicsPipeline) != VK_SUCCESS)
     {
         throw std::runtime_error("failed to create graphics pipeline!");
@@ -1024,7 +917,43 @@ void HelloTriangleApplication::CreateGraphicsPipeline()
     vkDestroyShaderModule(m_Device, vertShaderModule, nullptr);
 }
 
-void HelloTriangleApplication::CreateFramebuffers()
+void VulkanApplication::CreateComputePipeline()
+{
+    std::vector<char> computeShaderCode;
+    ReadFile("shaders/compute_comp.spv", computeShaderCode);
+
+    VkShaderModule computeShaderModule = CreateShaderModule(computeShaderCode);
+
+    VkPipelineShaderStageCreateInfo computeShaderStageInfo{};
+    computeShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    computeShaderStageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+    computeShaderStageInfo.module = computeShaderModule;
+    computeShaderStageInfo.pName = "main";
+
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+    pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipelineLayoutInfo.setLayoutCount = 1;
+    pipelineLayoutInfo.pSetLayouts = &m_ComputeDescriptorSetLayout;
+
+    if (vkCreatePipelineLayout(m_Device, &pipelineLayoutInfo, nullptr, &m_ComputePipelineLayout) != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to create compute pipeline layout!");
+    }
+
+    VkComputePipelineCreateInfo pipelineInfo{};
+    pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+    pipelineInfo.layout = m_ComputePipelineLayout;
+    pipelineInfo.stage = computeShaderStageInfo;
+
+    if (vkCreateComputePipelines(m_Device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_ComputePipeline) != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to create compute pipeline!");
+    }
+
+    vkDestroyShaderModule(m_Device, computeShaderModule, nullptr);
+}
+
+void VulkanApplication::CreateFramebuffers()
 {
     /*
     The attachments specified during render pass creation are bound by wrapping them into a
@@ -1038,18 +967,16 @@ void HelloTriangleApplication::CreateFramebuffers()
 
     for (size_t i = 0; i < m_SwapChainImageViews.size(); i++)
     {
-        std::array<VkImageView, 3> attachments =
+        VkImageView attachments[] =
         {
-            m_ColorImageView,
-            m_DepthImageView, 
             m_SwapChainImageViews[i],
         };
 
         VkFramebufferCreateInfo framebufferInfo{};
         framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
         framebufferInfo.renderPass = m_RenderPass;
-        framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());;
-        framebufferInfo.pAttachments = attachments.data();
+        framebufferInfo.attachmentCount = 1;
+        framebufferInfo.pAttachments = attachments;
         framebufferInfo.width = m_SwapChainExtent.width;
         framebufferInfo.height = m_SwapChainExtent.height;
         framebufferInfo.layers = 1;
@@ -1073,14 +1000,14 @@ void HelloTriangleApplication::CreateFramebuffers()
     }
 }
 
-void HelloTriangleApplication::CreateCommandPool()
+void VulkanApplication::CreateCommandPool()
 {
     const QueueFamilyIndices queueFamilyIndices = FindQueueFamilies(m_PhysicalDevice);
 
     VkCommandPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
+    poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsAndComputeFamily.value();
     /*
     There are two possible flags for command pools:
         VK_COMMAND_POOL_CREATE_TRANSIENT_BIT: Hint that command buffers are rerecorded with new commands very often (may change memory allocation behavior)
@@ -1093,210 +1020,65 @@ void HelloTriangleApplication::CreateCommandPool()
     }
 }
 
-void HelloTriangleApplication::CreateColorResources()
+void VulkanApplication::CreateShaderStorageBuffers()
 {
-    const VkFormat colorFormat = m_SwapChainImageFormat;
+    // Initialize particles
+    std::default_random_engine rndEngine((unsigned)time(nullptr));
+    std::uniform_real_distribution<float> rndDist(0.0f, 1.0f);
 
-    CreateImage(m_SwapChainExtent.width, m_SwapChainExtent.height, 1, m_MsaaSamples, colorFormat,
-        VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_ColorImage, m_ColorImageMemory);
-
-    m_ColorImageView = CreateImageView(m_ColorImage, colorFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
-}
-
-void HelloTriangleApplication::CreateDepthResources()
-{
-    const VkFormat depthFormat = FindDepthFormat();
-
-    CreateImage(m_SwapChainExtent.width, m_SwapChainExtent.height, 1, m_MsaaSamples, depthFormat,
-        VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_DepthImage, m_DepthImageMemory);
-
-    m_DepthImageView = CreateImageView(m_DepthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
-    /*
-    That's it for creating the depth image. We don't need to map it or copy another image to it,
-    because we're going to clear it at the start of the render pass like the color attachment.
-    */
-}
-
-void HelloTriangleApplication::CreateTextureImage()
-{
-    int texWidth, texHeight, texChannels;
-    //stbi_uc* pixels = stbi_load("textures/texture.png", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
-    stbi_uc* pixels = stbi_load(TEXTURE_PATH.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
-    VkDeviceSize imageSize = texWidth * texHeight * 4;
-
-    if (!pixels)
+    // Initial particle positions on a circle
+    std::vector<Particle> particles(PARTICLE_COUNT);
+    for (auto& particle : particles)
     {
-        throw std::runtime_error("failed to load texture image!");
+        const float r = 0.25f * sqrt(rndDist(rndEngine));
+        const float theta = rndDist(rndEngine) * 2.0f * 3.14159265358979323846f;
+        const float x = r * cosf(theta) * HEIGHT / WIDTH;
+        const float y = r * sinf(theta);
+        particle.position = glm::vec2(x, y);
+        particle.velocity = glm::normalize(glm::vec2(x, y)) * 0.00025f;
+        particle.color = glm::vec4(rndDist(rndEngine), rndDist(rndEngine), rndDist(rndEngine), 1.0f);
     }
 
-    m_MipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(texWidth, texHeight)))) + 1;
-    /*
-     The max function selects the largest dimension. The log2 function calculates how many times that dimension can be divided by 2.
-     The floor function handles cases where the largest dimension is not a power of 2.
-     1 is added so that the original image has a mip level.
-    */
+    VkDeviceSize bufferSize = sizeof(Particle) * PARTICLE_COUNT;
 
+    // Create a staging buffer used to upload data to the GPU
     VkBuffer stagingBuffer;
     VkDeviceMemory stagingBufferMemory;
 
-    CreateBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
-
-    void* data;
-    vkMapMemory(m_Device, stagingBufferMemory, 0, imageSize, 0, &data);
-    memcpy(data, pixels, static_cast<size_t>(imageSize));
-    vkUnmapMemory(m_Device, stagingBufferMemory);
-
-    stbi_image_free(pixels);
-
-    CreateImage(texWidth, texHeight, m_MipLevels, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R8G8B8A8_SRGB,
-        VK_IMAGE_TILING_OPTIMAL,
-        VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_TextureImage, m_TextureImageMemory);
-
-    /*
-    The next step is to copy the staging buffer to the texture image. This involves two steps:
-        Transition the texture image to VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
-        Execute the buffer to image copy operation
-    */
-    TransitionImageLayout(m_TextureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, m_MipLevels);
-    CopyBufferToImage(stagingBuffer, m_TextureImage, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
-    //transitioned to VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL while generating mipmaps
-
-    vkDestroyBuffer(m_Device, stagingBuffer, nullptr);
-    vkFreeMemory(m_Device, stagingBufferMemory, nullptr);
-
-    GenerateMipmaps(m_TextureImage, VK_FORMAT_R8G8B8A8_SRGB, texWidth, texHeight, m_MipLevels);
-}
-
-void HelloTriangleApplication::CreateTextureImageView()
-{
-    m_TextureImageView = CreateImageView(m_TextureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, m_MipLevels);
-}
-
-void HelloTriangleApplication::CreateTextureSampler()
-{
-    VkSamplerCreateInfo samplerInfo{};
-    samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-    samplerInfo.magFilter = VK_FILTER_LINEAR;
-    samplerInfo.minFilter = VK_FILTER_LINEAR;
-    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    /*
-    VK_SAMPLER_ADDRESS_MODE_REPEAT: Repeat the texture when going beyond the image dimensions.
-    VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT: Like repeat, but inverts the coordinates to mirror the image when going beyond the dimensions.
-    VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE: Take the color of the edge closest to the coordinate beyond the image dimensions.
-    VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE: Like clamp to edge, but instead uses the edge opposite to the closest edge.
-    VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER: Return a solid color when sampling beyond the dimensions of the image.
-    */
-
-    // Anisotropy
-    VkPhysicalDeviceProperties properties{};
-    vkGetPhysicalDeviceProperties(m_PhysicalDevice, &properties);
-
-    samplerInfo.anisotropyEnable = VK_TRUE;
-    /*
-    samplerInfo.anisotropyEnable = VK_FALSE; // in case if we don't want to request it at startup
-    samplerInfo.maxAnisotropy = 1.0f;
-    */
-    samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
-    samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-    /*
-    The borderColor field specifies which color is returned when sampling beyond the image with clamp to border addressing mode.
-    It is possible to return black, white or transparent in either float or int formats. You cannot specify an arbitrary color.
-    */
-
-    samplerInfo.unnormalizedCoordinates = VK_FALSE;
-    /*
-    The unnormalizedCoordinates field specifies which coordinate system you want to use to address texels in an image.
-    If this field is VK_TRUE, then you can simply use coordinates within the [0, texWidth) and [0, texHeight) range.
-    If it is VK_FALSE, then the texels are addressed using the [0, 1) range on all axes. Real-world applications almost always use normalized coordinates,
-    because then it's possible to use textures of varying resolutions with the exact same coordinates.
-    */
-
-    samplerInfo.compareEnable = VK_FALSE;
-    samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
-    /*
-    If a comparison function is enabled, then texels will first be compared to a value,
-    and the result of that comparison is used in filtering operations.
-    This is mainly used for percentage-closer filtering on shadow maps.
-    */
-
-    // Mipmapping
-    samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-    samplerInfo.minLod = 0.0f; // static_cast<float>(m_MipLevels / 2);
-    samplerInfo.maxLod = static_cast<float>(m_MipLevels);
-    samplerInfo.mipLodBias = 0.0f; // Optional
-
-    if (vkCreateSampler(m_Device, &samplerInfo, nullptr, &m_TextureSampler) != VK_SUCCESS)
-    {
-        throw std::runtime_error("failed to create texture sampler!");
-    }
-
-    /*
-    the sampler does not reference a VkImage anywhere. The sampler is a distinct object that provides an interface to extract colors from a texture.
-    It can be applied to any image you want, whether it is 1D, 2D or 3D.
-    This is different from many older APIs, which combined texture images and filtering into a single state.
-    */
-}
-
-void HelloTriangleApplication::CreateVertexBuffer()
-{
-    VkDeviceSize bufferSize = sizeof(m_Vertices[0]) * m_Vertices.size(); //sizeof(verticesData[0]) * verticesData.size();
-
-    VkBuffer stagingBuffer;
-    VkDeviceMemory stagingBufferMemory;
-    CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+    CreateBuffer(bufferSize,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        stagingBuffer, stagingBufferMemory);
 
     void* data;
     vkMapMemory(m_Device, stagingBufferMemory, 0, bufferSize, 0, &data);
-    memcpy(data, m_Vertices.data(), (size_t)bufferSize);
+    memcpy(data, particles.data(), (size_t)bufferSize);
     vkUnmapMemory(m_Device, stagingBufferMemory);
 
-    CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_VertexBuffer, m_VertexBufferMemory);
+    m_ShaderStorageBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+    m_ShaderStorageBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT);
 
-    CopyBuffer(stagingBuffer, m_VertexBuffer, bufferSize);
-
-    vkDestroyBuffer(m_Device, stagingBuffer, nullptr);
-    vkFreeMemory(m_Device, stagingBufferMemory, nullptr);
+    // Copy initial particle data to all storage buffers
     /*
-    the driver may not immediately copy the data into the buffer memory, for example because of caching.
-    It is also possible that writes to the buffer are not visible in the mapped memory yet.
-    There are two ways to deal with that problem:
-
-    Use a memory heap that is host coherent, indicated with VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
-    Call vkFlushMappedMemoryRanges after writing to the mapped memory, and call vkInvalidateMappedMemoryRanges
-    before reading from the mapped memory
-
-    The transfer of memory to GPU is guaranteed to be complete as of the next call to vkQueueSubmit
+        Using this staging buffer as a source we then create the per-frame shader storage buffers
+        and copy the particle properties from the staging buffer
     */
-}
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        CreateBuffer(bufferSize,
+            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
+            VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            m_ShaderStorageBuffers[i], m_ShaderStorageBuffersMemory[i]);
 
-void HelloTriangleApplication::CreateIndexBuffer()
-{
-    VkDeviceSize bufferSize = sizeof(m_Indices[0]) * m_Indices.size();//sizeof(indicesData[0]) * indicesData.size();
-
-    VkBuffer stagingBuffer;
-    VkDeviceMemory stagingBufferMemory;
-    CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
-
-    void* data;
-    vkMapMemory(m_Device, stagingBufferMemory, 0, bufferSize, 0, &data);
-    memcpy(data, m_Indices.data(), (size_t)bufferSize);
-    vkUnmapMemory(m_Device, stagingBufferMemory);
-
-    CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_IndexBuffer, m_IndexBufferMemory);
-
-    CopyBuffer(stagingBuffer, m_IndexBuffer, bufferSize);
+        CopyBuffer(stagingBuffer, m_ShaderStorageBuffers[i], bufferSize);
+    }
 
     vkDestroyBuffer(m_Device, stagingBuffer, nullptr);
     vkFreeMemory(m_Device, stagingBufferMemory, nullptr);
 }
 
-void HelloTriangleApplication::CreateUniformBuffers()
+void VulkanApplication::CreateUniformBuffers()
 {
-    VkDeviceSize bufferSize = sizeof(UniformBufferObject);
+    const VkDeviceSize bufferSize = sizeof(UniformBufferObject);
 
     m_UniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
     m_UniformBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT);
@@ -1304,20 +1086,22 @@ void HelloTriangleApplication::CreateUniformBuffers()
 
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
-        CreateBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        CreateBuffer(bufferSize,
+            VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
             m_UniformBuffers[i], m_UniformBuffersMemory[i]);
 
         vkMapMemory(m_Device, m_UniformBuffersMemory[i], 0, bufferSize, 0, &m_UniformBuffersMapped[i]);
     }
 }
 
-void HelloTriangleApplication::CreateDescriptorPool()
+void VulkanApplication::CreateDescriptorPool()
 {
     std::array<VkDescriptorPoolSize, 2> poolSizes{};
     poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER; // UBO
     poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
-    poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER; // Sampler
-    poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+
+    poolSizes[1].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; // Storage buffer
+    poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT) * 2;
 
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -1340,73 +1124,68 @@ void HelloTriangleApplication::CreateDescriptorPool()
     }
 }
 
-void HelloTriangleApplication::CreateDescriptorSets()
+void VulkanApplication::CreateComputeDescriptorSets()
 {
-    std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, m_DescriptorSetLayout);
+    std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, m_ComputeDescriptorSetLayout);
     VkDescriptorSetAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
     allocInfo.descriptorPool = m_DescriptorPool;
     allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
     allocInfo.pSetLayouts = layouts.data();
 
-    m_DescriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
-
-    if (vkAllocateDescriptorSets(m_Device, &allocInfo, m_DescriptorSets.data()) != VK_SUCCESS)
+    m_ComputeDescriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
+    if (vkAllocateDescriptorSets(m_Device, &allocInfo, m_ComputeDescriptorSets.data()) != VK_SUCCESS)
     {
         throw std::runtime_error("failed to allocate descriptor sets!");
     }
 
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
-        // UBO
-        VkDescriptorBufferInfo bufferInfo{};
-        bufferInfo.buffer = m_UniformBuffers[i];
-        bufferInfo.offset = 0;
-        bufferInfo.range = sizeof(UniformBufferObject);
+        VkDescriptorBufferInfo uniformBufferInfo{};
+        uniformBufferInfo.buffer = m_UniformBuffers[i];
+        uniformBufferInfo.offset = 0;
+        uniformBufferInfo.range = sizeof(UniformBufferObject);
 
-        // Sampler
-        VkDescriptorImageInfo imageInfo{};
-        imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        imageInfo.imageView = m_TextureImageView;
-        imageInfo.sampler = m_TextureSampler;
-
-        std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
-
+        std::array<VkWriteDescriptorSet, 3> descriptorWrites{};
         descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        descriptorWrites[0].dstSet = m_DescriptorSets[i];
+        descriptorWrites[0].dstSet = m_ComputeDescriptorSets[i];
         descriptorWrites[0].dstBinding = 0;
         descriptorWrites[0].dstArrayElement = 0;
         descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         descriptorWrites[0].descriptorCount = 1;
-        descriptorWrites[0].pBufferInfo = &bufferInfo;
-        /*
-        We need to specify the type of descriptor again.
-        It's possible to update multiple descriptors at once in an array, starting at index dstArrayElement.
-        The descriptorCount field specifies how many array elements you want to update.
-        */
+        descriptorWrites[0].pBufferInfo = &uniformBufferInfo;
+
+        VkDescriptorBufferInfo storageBufferInfoLastFrame{};
+        storageBufferInfoLastFrame.buffer = m_ShaderStorageBuffers[(i - 1) % MAX_FRAMES_IN_FLIGHT];
+        storageBufferInfoLastFrame.offset = 0;
+        storageBufferInfoLastFrame.range = sizeof(Particle) * PARTICLE_COUNT;
 
         descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        descriptorWrites[1].dstSet = m_DescriptorSets[i];
+        descriptorWrites[1].dstSet = m_ComputeDescriptorSets[i];
         descriptorWrites[1].dstBinding = 1;
         descriptorWrites[1].dstArrayElement = 0;
-        descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         descriptorWrites[1].descriptorCount = 1;
-        descriptorWrites[1].pImageInfo = &imageInfo;
-        descriptorWrites[1].pTexelBufferView = nullptr; // Optional
+        descriptorWrites[1].pBufferInfo = &storageBufferInfoLastFrame;
 
-        /*
-        The pBufferInfo field is used for descriptors that refer to buffer data, pImageInfo is used for descriptors
-        that refer to image data, and pTexelBufferView is used for descriptors that refer to buffer views.
-        */
+        VkDescriptorBufferInfo storageBufferInfoCurrentFrame{};
+        storageBufferInfoCurrentFrame.buffer = m_ShaderStorageBuffers[i];
+        storageBufferInfoCurrentFrame.offset = 0;
+        storageBufferInfoCurrentFrame.range = sizeof(Particle) * PARTICLE_COUNT;
 
-        vkUpdateDescriptorSets(m_Device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
+        descriptorWrites[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorWrites[2].dstSet = m_ComputeDescriptorSets[i];
+        descriptorWrites[2].dstBinding = 2;
+        descriptorWrites[2].dstArrayElement = 0;
+        descriptorWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        descriptorWrites[2].descriptorCount = 1;
+        descriptorWrites[2].pBufferInfo = &storageBufferInfoCurrentFrame;
+
+        vkUpdateDescriptorSets(m_Device, 3, descriptorWrites.data(), 0, nullptr);
     }
-    /*
-    The descriptors are now ready to be used by the shaders!
-    */
 }
 
-void HelloTriangleApplication::CreateCommandBuffers()
+void VulkanApplication::CreateCommandBuffers()
 {
     m_CommandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
 
@@ -1428,11 +1207,30 @@ void HelloTriangleApplication::CreateCommandBuffers()
     */
 }
 
-void HelloTriangleApplication::CreateSyncObjects()
+void VulkanApplication::CreateComputeCommandBuffers()
+{
+    m_ComputeCommandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+
+    VkCommandBufferAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.commandPool = m_CommandPool;
+    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandBufferCount = (uint32_t)m_ComputeCommandBuffers.size();
+
+    if (vkAllocateCommandBuffers(m_Device, &allocInfo, m_ComputeCommandBuffers.data()) != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to allocate compute command buffers!");
+    }
+}
+
+void VulkanApplication::CreateSyncObjects()
 {
     m_ImageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
     m_RenderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+    m_ComputeFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+
     m_InFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
+    m_ComputeInFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
 
     VkSemaphoreCreateInfo semaphoreInfo{};
     semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -1453,10 +1251,16 @@ void HelloTriangleApplication::CreateSyncObjects()
         {
             throw std::runtime_error("failed to create semaphores!");
         }
+
+        if (vkCreateSemaphore(m_Device, &semaphoreInfo, nullptr, &m_ComputeFinishedSemaphores[i]) != VK_SUCCESS ||
+            vkCreateFence(m_Device, &fenceInfo, nullptr, &m_ComputeInFlightFences[i]) != VK_SUCCESS)
+        {
+            throw std::runtime_error("failed to create compute synchronization objects for a frame!");
+        }
     }
 }
 
-void HelloTriangleApplication::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) const
+void VulkanApplication::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) const
 {
     VkCommandBufferBeginInfo beginInfo{};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -1484,18 +1288,18 @@ void HelloTriangleApplication::RecordCommandBuffer(VkCommandBuffer commandBuffer
     renderPassInfo.renderArea.offset = { 0, 0 };
     renderPassInfo.renderArea.extent = m_SwapChainExtent;
 
-    std::array<VkClearValue, 2> clearValues{};
-    clearValues[0].color = { {0.0f, 0.0f, 0.0f, 1.0f} };
-    clearValues[1].depthStencil = { 1.0f, 0 };
+    VkClearValue clearColor{};
+    clearColor.color = { {0.0f, 0.0f, 0.0f, 1.0f} };
+
     /*
     The range of depths in the depth buffer is 0.0 to 1.0 in Vulkan, where 1.0 lies at the far view plane and 0.0 at the near view plane.
     The initial value at each point in the depth buffer should be the furthest possible depth, which is 1.0.
 
-    !!! Note that the order of clearValues should be identical to the order of your attachments.
+    !!! Note that the order of clearColor should be identical to the order of your attachments.
     */
 
-    renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
-    renderPassInfo.pClearValues = clearValues.data();
+    renderPassInfo.clearValueCount = 1;
+    renderPassInfo.pClearValues = &clearColor;
 
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
     {
@@ -1533,20 +1337,10 @@ void HelloTriangleApplication::RecordCommandBuffer(VkCommandBuffer commandBuffer
         So we need to set them in the command buffer before issuing our draw command.
         */
 
-        VkBuffer vertexBuffers[] = { m_VertexBuffer };
         VkDeviceSize offsets[] = { 0 };
-        vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+        vkCmdBindVertexBuffers(commandBuffer, 0, 1, &m_ShaderStorageBuffers[m_CurrentFrameIdx], offsets);
 
-        vkCmdBindIndexBuffer(commandBuffer, m_IndexBuffer, 0, VK_INDEX_TYPE_UINT32);
-
-        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_PipelineLayout, 0, 1, &m_DescriptorSets[m_CurrentFrameIdx], 0, nullptr);
-
-        //vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(m_Indices.dataindicesData.size()), 1, 0, 0, 0);
-        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(m_Indices.size()), 1, 0, 0, 0);
-
-        //vkCmdDraw(commandBuffer, static_cast<uint32_t>(vertices.size()), 1, 0, 0);
-
-        //vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+        vkCmdDraw(commandBuffer, PARTICLE_COUNT, 1, 0, 0);
 
         /*
         It has the following parameters, aside from the command buffer:
@@ -1565,7 +1359,29 @@ void HelloTriangleApplication::RecordCommandBuffer(VkCommandBuffer commandBuffer
     }
 }
 
-VkCommandBuffer HelloTriangleApplication::BeginSingleTimeCommands()
+void VulkanApplication::RecordComputeCommandBuffer(VkCommandBuffer commandBuffer) const
+{
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+
+    if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to begin recording compute command buffer!");
+    }
+
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_ComputePipeline);
+
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_ComputePipelineLayout, 0, 1, &m_ComputeDescriptorSets[m_CurrentFrameIdx], 0, nullptr);
+
+    vkCmdDispatch(commandBuffer, PARTICLE_COUNT / 256, 1, 1);
+
+    if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to record compute command buffer!");
+    }
+}
+
+VkCommandBuffer VulkanApplication::BeginSingleTimeCommands()
 {
     VkCommandBufferAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -1585,7 +1401,7 @@ VkCommandBuffer HelloTriangleApplication::BeginSingleTimeCommands()
     return commandBuffer;
 }
 
-void HelloTriangleApplication::EndSingleTimeCommands(VkCommandBuffer commandBuffer)
+void VulkanApplication::EndSingleTimeCommands(VkCommandBuffer commandBuffer)
 {
     vkEndCommandBuffer(commandBuffer);
 
@@ -1600,31 +1416,15 @@ void HelloTriangleApplication::EndSingleTimeCommands(VkCommandBuffer commandBuff
     vkFreeCommandBuffers(m_Device, m_CommandPool, 1, &commandBuffer);
 }
 
-void HelloTriangleApplication::UpdateUniformBuffer(uint32_t currentImage)
+void VulkanApplication::UpdateUniformBuffer(uint32_t currentImage)
 {
-    static auto startTime = std::chrono::high_resolution_clock::now();
-
-    auto currentTime = std::chrono::high_resolution_clock::now();
-    const float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
-
     UniformBufferObject ubo{};
-    ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-
-    ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-
-    ubo.proj = glm::perspective(glm::radians(45.0f), m_SwapChainExtent.width / (float)m_SwapChainExtent.height, 0.1f, 10.0f);
-
-    ubo.proj[1][1] *= -1;
-    /*
-    GLM was originally designed for OpenGL, where the Y coordinate of the clip coordinates is inverted.
-    The easiest way to compensate for that is to flip the sign on the scaling factor of the Y axis in the projection matrix.
-    If you don't do this, then the image will be rendered upside down.
-    */
+    ubo.deltaTime = m_LastFrameTime * 2.0f;
 
     memcpy(m_UniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
 }
 
-void HelloTriangleApplication::DrawFrame()
+void VulkanApplication::DrawFrame()
 {
     /*
     At a high level, rendering a frame in Vulkan consists of a common set of steps:
@@ -1641,6 +1441,32 @@ void HelloTriangleApplication::DrawFrame()
     Semaphores are used to specify the execution order of operations on the GPU while
     fences are used to keep the CPU and GPU in sync with each-other.
     */
+
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+
+    // Compute submission
+
+    vkWaitForFences(m_Device, 1, &m_ComputeInFlightFences[m_CurrentFrameIdx], VK_TRUE, UINT64_MAX);
+
+    UpdateUniformBuffer(m_CurrentFrameIdx);
+    vkResetFences(m_Device, 1, &m_ComputeInFlightFences[m_CurrentFrameIdx]);
+
+    vkResetCommandBuffer(m_ComputeCommandBuffers[m_CurrentFrameIdx], /*VkCommandBufferResetFlagBits*/ 0);
+    RecordComputeCommandBuffer(m_ComputeCommandBuffers[m_CurrentFrameIdx]);
+
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &m_ComputeCommandBuffers[m_CurrentFrameIdx];
+    submitInfo.signalSemaphoreCount = 1;
+    submitInfo.pSignalSemaphores = &m_ComputeFinishedSemaphores[m_CurrentFrameIdx];
+
+    if (vkQueueSubmit(m_ComputeQueue, 1, &submitInfo, m_ComputeInFlightFences[m_CurrentFrameIdx]) != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to submit compute command buffer!");
+    };
+
+    //////////////////////////////////////////////////////////////////////////
+    // Graphics submission
 
     vkWaitForFences(m_Device, 1, &m_InFlightFences[m_CurrentFrameIdx], VK_TRUE, UINT64_MAX);
     /*
@@ -1687,9 +1513,7 @@ void HelloTriangleApplication::DrawFrame()
     The index refers to the VkImage in our swapChainImages array. We're going to use that index to pick the VkFrameBuffer.
     */
 
-    UpdateUniformBuffer(m_CurrentFrameIdx);
-
-    // After waiting, we need to manually reset the fence to the unsignaled statei
+    // After waiting, we need to manually reset the fence to the unsignaled state
     vkResetFences(m_Device, 1, &m_InFlightFences[m_CurrentFrameIdx]);
 
     //////////////////////////////////////////////////////////////////////////
@@ -1707,15 +1531,15 @@ void HelloTriangleApplication::DrawFrame()
     //////////////////////////////////////////////////////////////////////////
     // Submitting the command buffer
 
-    VkSubmitInfo submitInfo{};
-    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     /*
     Queue submission and synchronization is configured through parameters in the VkSubmitInfo structure.
     */
 
-    VkSemaphore waitSemaphores[] = { m_ImageAvailableSemaphores[m_CurrentFrameIdx]};
-    VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-    submitInfo.waitSemaphoreCount = 1;
+    VkSemaphore waitSemaphores[] = { m_ComputeFinishedSemaphores[m_CurrentFrameIdx], m_ImageAvailableSemaphores[m_CurrentFrameIdx] };
+    VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+    submitInfo = {};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.waitSemaphoreCount = 2;
     submitInfo.pWaitSemaphores = waitSemaphores;
     submitInfo.pWaitDstStageMask = waitStages;
     /*
@@ -1812,7 +1636,7 @@ void HelloTriangleApplication::DrawFrame()
     m_CurrentFrameIdx = (m_CurrentFrameIdx + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
-VkImageView HelloTriangleApplication::CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels) const
+VkImageView VulkanApplication::CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels) const
 {
     VkImageViewCreateInfo viewInfo{};
     viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -1850,7 +1674,7 @@ VkImageView HelloTriangleApplication::CreateImageView(VkImage image, VkFormat fo
     return imageView;
 }
 
-VkShaderModule HelloTriangleApplication::CreateShaderModule(const std::vector<char>& code) const
+VkShaderModule VulkanApplication::CreateShaderModule(const std::vector<char>& code) const
 {
     VkShaderModuleCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -1866,7 +1690,7 @@ VkShaderModule HelloTriangleApplication::CreateShaderModule(const std::vector<ch
     return shaderModule;
 }
 
-void HelloTriangleApplication::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory)
+void VulkanApplication::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory)
 {
     VkBufferCreateInfo bufferInfo{};
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -1895,7 +1719,7 @@ void HelloTriangleApplication::CreateBuffer(VkDeviceSize size, VkBufferUsageFlag
     vkBindBufferMemory(m_Device, buffer, bufferMemory, 0);
 }
 
-void HelloTriangleApplication::CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size)
+void VulkanApplication::CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size)
 {
     const VkCommandBuffer commandBuffer = BeginSingleTimeCommands();
 
@@ -1908,7 +1732,7 @@ void HelloTriangleApplication::CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer
     EndSingleTimeCommands(commandBuffer);
 }
 
-void HelloTriangleApplication::CreateImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory)
+void VulkanApplication::CreateImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory)
 {
     VkImageCreateInfo imageInfo{};
     imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -1955,7 +1779,7 @@ void HelloTriangleApplication::CreateImage(uint32_t width, uint32_t height, uint
     vkBindImageMemory(m_Device, image, imageMemory, 0);
 }
 
-void HelloTriangleApplication::CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height)
+void VulkanApplication::CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height)
 {
     const VkCommandBuffer commandBuffer = BeginSingleTimeCommands();
     /*
@@ -1999,7 +1823,7 @@ void HelloTriangleApplication::CopyBufferToImage(VkBuffer buffer, VkImage image,
     EndSingleTimeCommands(commandBuffer);
 }
 
-void HelloTriangleApplication::TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels)
+void VulkanApplication::TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels)
 {
     const VkCommandBuffer commandBuffer = BeginSingleTimeCommands();
     /*
@@ -2081,7 +1905,7 @@ void HelloTriangleApplication::TransitionImageLayout(VkImage image, VkFormat for
     EndSingleTimeCommands(commandBuffer);
 }
 
-void HelloTriangleApplication::GenerateMipmaps(VkImage image, VkFormat imageFormat, int32_t texWidth, int32_t texHeight, uint32_t mipLevels)
+void VulkanApplication::GenerateMipmaps(VkImage image, VkFormat imageFormat, int32_t texWidth, int32_t texHeight, uint32_t mipLevels)
 {
     // Check if image format supports linear blitting
     VkFormatProperties formatProperties;
@@ -2215,7 +2039,7 @@ void HelloTriangleApplication::GenerateMipmaps(VkImage image, VkFormat imageForm
     EndSingleTimeCommands(commandBuffer);
 }
 
-bool HelloTriangleApplication::CheckValidationLayerSupport() const
+bool VulkanApplication::CheckValidationLayerSupport() const
 {
     uint32_t layerCount;
     vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
@@ -2245,7 +2069,7 @@ bool HelloTriangleApplication::CheckValidationLayerSupport() const
     return true;
 }
 
-bool HelloTriangleApplication::CheckDeviceExtensionSupport(VkPhysicalDevice device) const
+bool VulkanApplication::CheckDeviceExtensionSupport(VkPhysicalDevice device) const
 {
     uint32_t extensionCount;
     vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
@@ -2263,7 +2087,7 @@ bool HelloTriangleApplication::CheckDeviceExtensionSupport(VkPhysicalDevice devi
     return requiredExtensions.empty();
 }
 
-SwapChainSupportDetails HelloTriangleApplication::QuerySwapChainSupport(VkPhysicalDevice device) const
+SwapChainSupportDetails VulkanApplication::QuerySwapChainSupport(VkPhysicalDevice device) const
 {
     SwapChainSupportDetails details;
 
@@ -2290,23 +2114,7 @@ SwapChainSupportDetails HelloTriangleApplication::QuerySwapChainSupport(VkPhysic
     return details;
 }
 
-VkSampleCountFlagBits HelloTriangleApplication::GetMaxUsableSampleCount() const
-{
-    VkPhysicalDeviceProperties physicalDeviceProperties;
-    vkGetPhysicalDeviceProperties(m_PhysicalDevice, &physicalDeviceProperties);
-
-    const VkSampleCountFlags counts = physicalDeviceProperties.limits.framebufferColorSampleCounts & physicalDeviceProperties.limits.framebufferDepthSampleCounts;
-    if (counts & VK_SAMPLE_COUNT_64_BIT) { return VK_SAMPLE_COUNT_64_BIT; }
-    if (counts & VK_SAMPLE_COUNT_32_BIT) { return VK_SAMPLE_COUNT_32_BIT; }
-    if (counts & VK_SAMPLE_COUNT_16_BIT) { return VK_SAMPLE_COUNT_16_BIT; }
-    if (counts & VK_SAMPLE_COUNT_8_BIT) { return VK_SAMPLE_COUNT_8_BIT; }
-    if (counts & VK_SAMPLE_COUNT_4_BIT) { return VK_SAMPLE_COUNT_4_BIT; }
-    if (counts & VK_SAMPLE_COUNT_2_BIT) { return VK_SAMPLE_COUNT_2_BIT; }
-
-    return VK_SAMPLE_COUNT_1_BIT;
-}
-
-std::vector<const char*> HelloTriangleApplication::GetRequiredExtensions() const
+std::vector<const char*> VulkanApplication::GetRequiredExtensions() const
 {
     uint32_t glfwExtensionCount = 0;
     const char** glfwExtensions;
@@ -2322,7 +2130,7 @@ std::vector<const char*> HelloTriangleApplication::GetRequiredExtensions() const
     return extensions;
 }
 
-VkSurfaceFormatKHR HelloTriangleApplication::ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats) const
+VkSurfaceFormatKHR VulkanApplication::ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats) const
 {
     for (const auto& availableFormat : availableFormats)
     {
@@ -2336,7 +2144,7 @@ VkSurfaceFormatKHR HelloTriangleApplication::ChooseSwapSurfaceFormat(const std::
     return availableFormats[0];
 }
 
-VkPresentModeKHR HelloTriangleApplication::ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes) const
+VkPresentModeKHR VulkanApplication::ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes) const
 {
     // VK_PRESENT_MODE_MAILBOX_KHR is a very nice trade-off if energy usage is not a concern
     /*
@@ -2354,7 +2162,7 @@ VkPresentModeKHR HelloTriangleApplication::ChooseSwapPresentMode(const std::vect
     return VK_PRESENT_MODE_FIFO_KHR;
 }
 
-VkExtent2D HelloTriangleApplication::ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities) const
+VkExtent2D VulkanApplication::ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities) const
 {
     if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max())
     {
@@ -2379,7 +2187,7 @@ VkExtent2D HelloTriangleApplication::ChooseSwapExtent(const VkSurfaceCapabilitie
     }
 }
 
-QueueFamilyIndices HelloTriangleApplication::FindQueueFamilies(VkPhysicalDevice device) const
+QueueFamilyIndices VulkanApplication::FindQueueFamilies(VkPhysicalDevice device) const
 {
     QueueFamilyIndices indices;
     // Assign index to queue families that could be found
@@ -2391,9 +2199,10 @@ QueueFamilyIndices HelloTriangleApplication::FindQueueFamilies(VkPhysicalDevice 
     int i = 0;
     for (const auto& queueFamily : queueFamilies)
     {
-        if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+        if ((queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) &&
+            (queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT))
         {
-            indices.graphicsFamily = i;
+            indices.graphicsAndComputeFamily = i;
         }
 
         VkBool32 presentSupport = false;
@@ -2414,7 +2223,7 @@ QueueFamilyIndices HelloTriangleApplication::FindQueueFamilies(VkPhysicalDevice 
     return indices;
 }
 
-uint32_t HelloTriangleApplication::FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties)
+uint32_t VulkanApplication::FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties)
 {
     VkPhysicalDeviceMemoryProperties memProperties;
     vkGetPhysicalDeviceMemoryProperties(m_PhysicalDevice, &memProperties);
@@ -2436,7 +2245,7 @@ uint32_t HelloTriangleApplication::FindMemoryType(uint32_t typeFilter, VkMemoryP
     throw std::runtime_error("failed to find suitable memory type!");
 }
 
-VkFormat HelloTriangleApplication::FindSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features) const
+VkFormat VulkanApplication::FindSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features) const
 {
     for (VkFormat format : candidates)
     {
@@ -2463,7 +2272,7 @@ VkFormat HelloTriangleApplication::FindSupportedFormat(const std::vector<VkForma
     return VK_FORMAT_UNDEFINED;
 }
 
-VkFormat HelloTriangleApplication::FindDepthFormat() const
+VkFormat VulkanApplication::FindDepthFormat() const
 {
     return FindSupportedFormat(
         { VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT },
@@ -2474,7 +2283,7 @@ VkFormat HelloTriangleApplication::FindDepthFormat() const
     // All of these candidate formats contain a depth component, but the latter two also contain a stencil component
 }
 
-int HelloTriangleApplication::RateDeviceSuitability(VkPhysicalDevice device) const
+int VulkanApplication::RateDeviceSuitability(VkPhysicalDevice device) const
 {
     int score = 0;
     // Checks the necessary queue family
@@ -2533,59 +2342,8 @@ int HelloTriangleApplication::RateDeviceSuitability(VkPhysicalDevice device) con
     return score;
 }
 
-void HelloTriangleApplication::FramebufferResizeCallback(GLFWwindow* window, int width, int height)
+void VulkanApplication::FramebufferResizeCallback(GLFWwindow* window, int width, int height)
 {
-    auto app = reinterpret_cast<HelloTriangleApplication*>(glfwGetWindowUserPointer(window));
+    auto app = reinterpret_cast<VulkanApplication*>(glfwGetWindowUserPointer(window));
     app->m_IsFamebufferResized = true;
-}
-
-void HelloTriangleApplication::LoadModel()
-{
-    tinyobj::attrib_t attrib;
-    std::vector<tinyobj::shape_t> shapes;
-    std::vector<tinyobj::material_t> materials;
-    std::string warn, err;
-
-    if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, MODEL_PATH.c_str()))
-    {
-        throw std::runtime_error(warn + err);
-    }
-
-    std::unordered_map<Vertex, uint32_t> uniqueVertices{};
-
-    for (const auto& shape : shapes)
-    {
-        for (const auto& index : shape.mesh.indices)
-        {
-            Vertex vertex{};
-
-            vertex.pos =
-            {
-                attrib.vertices[3 * index.vertex_index + 0],
-                attrib.vertices[3 * index.vertex_index + 1],
-                attrib.vertices[3 * index.vertex_index + 2]
-            };
-
-            vertex.texCoord =
-            {
-                attrib.texcoords[2 * index.texcoord_index + 0],
-                1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
-                /*
-                The OBJ format assumes a coordinate system where a vertical coordinate of 0 means the bottom of the image,
-                however we've uploaded our image into Vulkan in a top to bottom orientation where 0 means the top of the image.
-                Solve this by flipping the vertical component of the texture coordinates
-                */
-            };
-
-            if (uniqueVertices.count(vertex) == 0)
-            {
-                uniqueVertices[vertex] = static_cast<uint32_t>(m_Vertices.size());
-                m_Vertices.push_back(vertex);
-            }
-
-            m_Indices.push_back(uniqueVertices[vertex]);
-
-            vertex.color = { 1.0f, 1.0f, 1.0f };
-        }
-    }
 }

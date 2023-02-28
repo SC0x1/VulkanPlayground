@@ -9,9 +9,8 @@
       <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
       <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
     </Filter>
-    <Filter Include="Resource Files">
-      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
-      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    <Filter Include="Shaders">
+      <UniqueIdentifier>{b2681396-5ef2-412d-bd22-47bde25787a5}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -28,10 +27,21 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="Shaders\shader.vert" />
-    <None Include="Shaders\shader.frag" />
-    <None Include="compile_shaders.bat">
-      <Filter>Source Files</Filter>
+    <None Include="Shaders\shader_compute.comp">
+      <Filter>Shaders</Filter>
     </None>
+    <None Include="Shaders\shader_compute.frag">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="Shaders\shader_compute.vert">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="Shaders\shader_main.frag">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="Shaders\shader_main.vert">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="compile_shaders.bat" />
   </ItemGroup>
 </Project>
