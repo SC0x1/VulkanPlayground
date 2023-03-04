@@ -6,7 +6,7 @@
 
 int main()
 {
-    HelloTriangleApplication app;
+    VulkanApplication app;
 
     try
     {

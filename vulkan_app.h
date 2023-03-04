@@ -147,7 +147,7 @@ struct SwapChainSupportDetails
     std::vector<VkPresentModeKHR> presentModes;
 };
 
-class HelloTriangleApplication
+class VulkanApplication
 {
 public:
 
@@ -244,6 +244,8 @@ private:
     }
 
     static void FramebufferResizeCallback(GLFWwindow* window, int width, int height);
+
+    void SetCurrentDirectory();
 
     void LoadModel();
 
