@@ -17,10 +17,10 @@ project "VulkanPlayground"
 
     files
     {
-        "**.h", "**.cpp",
-        "shaders/**.copm", 
-        "shaders/**.vert", 
-        "shaders/**.frag", 
+        "source/**.h", "source/**.cpp",
+        "shaders/**.copm",
+        "shaders/**.vert",
+        "shaders/**.frag",
     }
 
     removefiles
@@ -34,12 +34,14 @@ project "VulkanPlayground"
         "externals/stb/",
         "externals/glm/",
         "externals/glfw/include/",
-        "externals/tinyobjloader/"
+        "externals/tinyobjloader/",
+        "externals/",
+        "source/"
     }
 
     libdirs { "%VULKAN_SDK%/Lib", "binaries/Lib" }
 
-    links { "glfw3", "vulkan-1", "gdi32"}
+    links { "glfw3", "vulkan-1"}
 
     filter "system:windows"
         cppdialect "C++17"

@@ -8,10 +8,6 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
-#ifndef VKPG_ROOT_DIR
-#define VKPG_ROOT_DIR "../"
-#endif
-
 const std::string MODEL_PATH = "models/viking_room.obj";
 const std::string TEXTURE_PATH = "textures/viking_room.png";
 
@@ -140,8 +136,8 @@ void VulkanExample::CreateDescriptorSetLayout()
 void VulkanExample::CreateGraphicsPipeline()
 {
     std::vector<char> vertShaderCode;
-    const std::string pathVert = VKPG_ROOT_DIR + std::string("Shaders/shader.vert.spv");
-    const std::string pathFrag = VKPG_ROOT_DIR + std::string("Shaders/shader.frag.spv");
+    const std::string pathVert = std::string("shaders/vert.spv");
+    const std::string pathFrag = std::string("shaders/frag.spv");
 
     ReadFile(pathVert.c_str(), vertShaderCode);
     std::vector<char> fragShaderCode;
@@ -402,7 +398,7 @@ void VulkanExample::CreateTextureImage()
 {
     int texWidth, texHeight, texChannels;
     //stbi_uc* pixels = stbi_load("textures/texture.png", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
-    const std::string pathTexture = VKPG_ROOT_DIR + TEXTURE_PATH;
+    const std::string& pathTexture = TEXTURE_PATH;
     stbi_uc* pixels = stbi_load(pathTexture.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
     VkDeviceSize imageSize = texWidth * texHeight * 4;
 
@@ -875,7 +871,7 @@ void VulkanExample::LoadModel()
     std::vector<tinyobj::material_t> materials;
     std::string warn, err;
 
-    const std::string pathModel = VKPG_ROOT_DIR + MODEL_PATH;
+    const std::string & pathModel = MODEL_PATH;
 
     if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, pathModel.c_str()))
     {

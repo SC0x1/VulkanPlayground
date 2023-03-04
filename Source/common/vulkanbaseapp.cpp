@@ -82,6 +82,8 @@ VulkanBaseApp::~VulkanBaseApp()
 
 void VulkanBaseApp::Run()
 {
+    SetCurrentDirectory();
+
     InitWindow();
 
     InitializeVulkan();
@@ -1745,4 +1747,24 @@ void VulkanBaseApp::FramebufferResizeCallback(GLFWwindow* window, int width, int
 {
     auto app = reinterpret_cast<VulkanBaseApp*>(glfwGetWindowUserPointer(window));
     app->m_IsFamebufferResized = true;
+}
+
+void VulkanBaseApp::SetCurrentDirectory()
+{
+#ifdef _WIN32
+    wchar_t buffer[MAX_PATH];
+    GetModuleFileNameW(NULL, buffer, MAX_PATH);
+    std::wstring pathToExe(buffer);
+
+    std::size_t posBuildInPath = pathToExe.find(L"build");
+    if (posBuildInPath != std::string::npos)
+    {
+        _wchdir(pathToExe.substr(0, posBuildInPath).c_str());
+    }
+    else
+    {
+        std::wstring::size_type pos = pathToExe.find_last_of(L"\\/");
+        _wchdir(pathToExe.substr(0, pos).c_str());
+    }
+#endif
 }

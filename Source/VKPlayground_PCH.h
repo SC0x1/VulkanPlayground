@@ -32,8 +32,15 @@
 
 #include <chrono>
 #include <thread>
+#include <random>
 #include <fstream>
 #include <unordered_map>
+#include <map>
+
+#include <direct.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <errno.h>
 
 #include <vulkan/vulkan.h>
 
