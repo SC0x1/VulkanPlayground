@@ -1,5 +1,10 @@
 #include "vulkan_app.h"
 
+#include <direct.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <errno.h>
+
 #include <chrono>
 #include <random>
 #include <thread>
@@ -99,6 +104,8 @@ void ReadFile(const std::string& filename, std::vector<char>& buffer)
 
 void VulkanApplication::Run()
 {
+    SetCurrentDirectory();
+
     InitWindow();
 
     InitVulkan();
@@ -2346,4 +2353,24 @@ void VulkanApplication::FramebufferResizeCallback(GLFWwindow* window, int width,
 {
     auto app = reinterpret_cast<VulkanApplication*>(glfwGetWindowUserPointer(window));
     app->m_IsFamebufferResized = true;
+}
+
+void VulkanApplication::SetCurrentDirectory()
+{
+#ifdef _WIN32
+    wchar_t buffer[MAX_PATH];
+    GetModuleFileNameW(NULL, buffer, MAX_PATH);
+    std::wstring pathToExe(buffer);
+
+    std::size_t posBuildInPath = pathToExe.find(L"build");
+    if (posBuildInPath != std::string::npos)
+    {
+        _wchdir(pathToExe.substr(0, posBuildInPath).c_str());
+    }
+    else
+    {
+        std::wstring::size_type pos = pathToExe.find_last_of(L"\\/");
+        _wchdir(pathToExe.substr(0, pos).c_str());
+    }
+#endif
 }

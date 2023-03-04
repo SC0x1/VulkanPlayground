@@ -277,6 +277,8 @@ private:
 
     static void FramebufferResizeCallback(GLFWwindow* window, int width, int height);
 
+    void SetCurrentDirectory();
+
 private:
     const int MAX_FRAMES_IN_FLIGHT = 2;
 
