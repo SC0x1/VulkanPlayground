@@ -155,7 +155,10 @@ _DESIGN/
 
 #Complier temp files
 /x64/Debug/*
-/Temp/*
+/temp/*
 /build/*
 
-/out/*
+/out/
+
+/temp/*
+/compiler/*
