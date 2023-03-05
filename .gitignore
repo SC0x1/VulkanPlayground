@@ -158,3 +158,5 @@ _DESIGN/
 
 /out/
 
+/temp/*
+/compiler/*
