@@ -153,3 +153,9 @@ _DESIGN/
 !*.PNG
 /x64/Debug/*
 /Temp/Debug
+/build/*
+
+/out/
+
+/temp/*
+/compiler/*
