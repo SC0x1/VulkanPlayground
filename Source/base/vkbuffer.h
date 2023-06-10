@@ -2,7 +2,7 @@
 
 #include "vulkan/vulkan.h"
 
-namespace vks
+namespace vk
 {
     struct Buffer
     {
@@ -18,7 +18,7 @@ namespace vks
         VkBufferUsageFlags m_UsageFlags;
         // Memory property flags to be filled by external source at buffer creation
         VkMemoryPropertyFlags m_MemoryPropertyFlags;
-        
+
         VkResult map(VkDeviceSize size = VK_WHOLE_SIZE, VkDeviceSize offset = 0);
         void unmap();
         VkResult bind(VkDeviceSize offset = 0);

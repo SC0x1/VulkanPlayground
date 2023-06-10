@@ -30,3 +30,7 @@
 [submodule "Externals/assimp"]
     path = Externals/assimp
     url = https://github.com/assimp/assimp
+[submodule "Externals/ImGuizmo"]
+	path = Externals/ImGuizmo
+	url = https://github.com/CedricGuillemet/ImGuizmo.git
+	branch = master

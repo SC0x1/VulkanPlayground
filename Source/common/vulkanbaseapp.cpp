@@ -308,11 +308,11 @@ void VulkanBaseApp::SubmitFrame()
      or we can make the render pass wait for the VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT stage.
     */
 
-//////////////////////////////////////////////////////////////////////////
-// Presentation
-/*
-The last step of drawing a frame is submitting the result back to the swap chain to have it eventually show up on the screen.
-*/
+    //////////////////////////////////////////////////////////////////////////
+    // Presentation
+    /*
+    The last step of drawing a frame is submitting the result back to the swap chain to have it eventually show up on the screen.
+    */
 
     VkPresentInfoKHR presentInfo{};
     presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -855,7 +855,7 @@ void VulkanBaseApp::CreateRenderPass()
         throw std::runtime_error("failed to create render pass!");
     }
 }
- 
+
 void VulkanBaseApp::CreateFramebuffers()
 {
     /*

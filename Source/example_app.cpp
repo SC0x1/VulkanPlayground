@@ -42,7 +42,7 @@ VulkanExample::~VulkanExample()
 void VulkanExample::InitializeVulkan()
 {
     VulkanBaseApp::InitializeVulkan();
-    
+
     CreateTextureImage();
     CreateTextureImageView();
     CreateTextureSampler();
@@ -121,7 +121,7 @@ void VulkanExample::CreateDescriptorSetLayout()
     uboLayoutBinding.pImmutableSamplers = nullptr; // Optional
 
     std::array<VkDescriptorSetLayoutBinding, 2> bindings = { uboLayoutBinding, samplerLayoutBinding };
-    
+
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());;
@@ -806,7 +806,7 @@ void VulkanExample::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t 
         */
     }
     vkCmdEndRenderPass(commandBuffer);
-    
+
     // We've finished recording the command buffer
     if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS)
     {
@@ -871,7 +871,7 @@ void VulkanExample::LoadModel()
     std::vector<tinyobj::material_t> materials;
     std::string warn, err;
 
-    const std::string & pathModel = MODEL_PATH;
+    const std::string& pathModel = MODEL_PATH;
 
     if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, pathModel.c_str()))
     {

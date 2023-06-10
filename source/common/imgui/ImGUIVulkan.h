@@ -5,13 +5,21 @@
 
 class VulkanBaseApp;
 
-class ImGUI
+class VulkanImGUI
 {
+public:
+
+    void Initialize();
+    void Shutdown();
+
+    void BeginFrame();
+    void EndFrame();
+
 private:
     // Vulkan resources for rendering the UI
     VkSampler sampler;
-    vks::Buffer vertexBuffer;
-    vks::Buffer indexBuffer;
+    vk::Buffer vertexBuffer;
+    vk::Buffer indexBuffer;
     int32_t vertexCount = 0;
     int32_t indexCount = 0;
     VkDeviceMemory fontMemory = VK_NULL_HANDLE;
@@ -23,11 +31,9 @@ private:
     VkDescriptorPool descriptorPool;
     VkDescriptorSetLayout descriptorSetLayout;
     VkDescriptorSet descriptorSet;
-    vks::VulkanDevice* device;
+    vk::VulkanDevice* device;
     VkPhysicalDeviceDriverProperties driverProperties = {};
     VulkanBaseApp* example;
-
-public:
 
 };
 

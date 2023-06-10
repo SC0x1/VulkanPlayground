@@ -138,6 +138,7 @@ externals/*
 !/externals/assimp
 !/externals/stb
 !/externals/tinyobjloader
+!/externals/ImGuizmo
 
 Data/*
 !/Data/Screenshots/

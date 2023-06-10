@@ -1,19 +1,20 @@
+include "dependencies.lua"
+
 workspace "VulkanPlayground"
     location "Compiler"
-
     architecture "x64"
-
     configurations { "Debug", "Release", }
 
-outputdir = "%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"
-VULKAN_SDK = os.getenv("VULKAN_SDK")
+group "Dependencies"
+    include "external"
+group ""
 
 project "VulkanPlayground"
     language "C++"
     kind "ConsoleApp"
-    targetdir("build/")
 
-    objdir("temp/" .. outputdir .. "/%{prj.name}")
+    targetdir (outputbuild)
+	objdir (outputint)
 
     files
     {
@@ -21,27 +22,39 @@ project "VulkanPlayground"
         "shaders/**.copm",
         "shaders/**.vert",
         "shaders/**.frag",
+
+        "external/imgui/backends/imgui_impl_glfw.h",
+        "external/imgui/backends/imgui_impl_glfw.cpp",
+        "external/imgui/backends/imgui_impl_vulkan.h",
+        "external/imgui/backends/imgui_impl_vulkan.cpp",
     }
 
     removefiles
     {
-        "externals/**",
+    --    "external/**",
     }
 
     includedirs
     {
         "%VULKAN_SDK%/include/",
-        "externals/stb/",
-        "externals/glm/",
-        "externals/glfw/include/",
-        "externals/tinyobjloader/",
-        "externals/",
+        "%{IncludeDir.ImGui}",
+        "%{IncludeDir.ImGui}/backends/",
+        "external/stb/",
+        "external/glm/",
+        "external/glfw/include/",
+        "external/tinyobjloader/",
+        "external/",
         "source/"
     }
 
-    libdirs { "%VULKAN_SDK%/Lib", "binaries/Lib" }
+    libdirs { "%VULKAN_SDK%/Lib", "%{LibraryDir.ImGui}", "%LibraryDir.GLFW}" }
 
-    links { "glfw3", "vulkan-1"}
+    links
+    {
+        "glfw3",
+        "ImGui" .. "%{cfg.targetsuffix}",
+        "vulkan-1"
+    }
 
     filter "system:windows"
         cppdialect "C++17"
@@ -61,3 +74,10 @@ project "VulkanPlayground"
     filter "configurations:Release"
         defines "BUILD_RELEASE"
         optimize "On"
+        targetsuffix ("")
+
+    filter "configurations:Final"
+        runtime "Release"
+        optimize "on"
+        symbols "off"
+        targetsuffix ("")

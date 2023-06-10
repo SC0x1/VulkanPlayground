@@ -8,7 +8,7 @@
 #include <vector>
 #include <stdexcept>
 
-#define vkSTART_NAMESPACE namespace vks {
+#define vkSTART_NAMESPACE namespace vk {
 #define vkEND_NAMESPACE }
 
 #define VK_FLAGS_NONE 0
