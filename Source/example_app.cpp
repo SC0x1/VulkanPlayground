@@ -1,5 +1,6 @@
 #include "VKPlayground_PCH.h"
 
+#include "vulkan/vkutils.h"
 #include "example_app.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
@@ -7,6 +8,8 @@
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
+
+QB_SINGLETON_GENERIC_DEFINE(VulkanExample);
 
 const std::string MODEL_PATH = "models/viking_room.obj";
 const std::string TEXTURE_PATH = "textures/viking_room.png";
@@ -96,6 +99,7 @@ void VulkanExample::Cleanup()
 void VulkanExample::Render()
 {
     DrawFrame();
+    // DrawImGui
 }
 
 void VulkanExample::CreateDescriptorSetLayout()
@@ -143,8 +147,10 @@ void VulkanExample::CreateGraphicsPipeline()
     std::vector<char> fragShaderCode;
     ReadFile(pathFrag.c_str(), fragShaderCode);
 
-    const VkShaderModule vertShaderModule = CreateShaderModule(vertShaderCode);
-    const VkShaderModule fragShaderModule = CreateShaderModule(fragShaderCode);
+    VkShaderModule vertShaderModule;
+    VK_CHECK_RESULT(VkUtils::CreateShaderModule(m_Device, vertShaderCode, vertShaderModule));
+    VkShaderModule fragShaderModule;
+    VK_CHECK_RESULT(VkUtils::CreateShaderModule(m_Device, fragShaderCode, fragShaderModule));
 
     VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
     vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -581,7 +587,8 @@ void VulkanExample::CreateUniformBuffers()
 
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
-        CreateBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        CreateBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
             m_UniformBuffers[i], m_UniformBuffersMemory[i]);
 
         vkMapMemory(m_Device, m_UniformBuffersMemory[i], 0, bufferSize, 0, &m_UniformBuffersMapped[i]);

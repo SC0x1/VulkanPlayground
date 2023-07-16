@@ -6,9 +6,9 @@ namespace vk
 {
     struct Buffer
     {
-        VkDevice m_Device;
+        VkDevice m_Device = VK_NULL_HANDLE;
         VkBuffer m_Buffer = VK_NULL_HANDLE;
-        VkDeviceMemory m_Memory = VK_NULL_HANDLE;
+        VkDeviceMemory m_DeviceMemory = VK_NULL_HANDLE;
         VkDescriptorBufferInfo m_Descriptor;
         VkDeviceSize m_Size = 0;
         VkDeviceSize m_Alignment = 0;

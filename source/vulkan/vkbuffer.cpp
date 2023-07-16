@@ -1,7 +1,7 @@
 #include <assert.h>
 #include <memory>
 
-#include "vkbuffer.h"
+#include <vulkan/vkbuffer.h>
 
 namespace vk
 {
@@ -15,7 +15,7 @@ namespace vk
     */
     VkResult Buffer::map(VkDeviceSize size, VkDeviceSize offset)
     {
-        return vkMapMemory(m_Device, m_Memory, offset, size, 0, &m_Mapped);
+        return vkMapMemory(m_Device, m_DeviceMemory, offset, size, 0, &m_Mapped);
     }
 
     /**
@@ -27,7 +27,7 @@ namespace vk
     {
         if (m_Mapped)
         {
-            vkUnmapMemory(m_Device, m_Memory);
+            vkUnmapMemory(m_Device, m_DeviceMemory);
             m_Mapped = nullptr;
         }
     }
@@ -41,7 +41,7 @@ namespace vk
     */
     VkResult Buffer::bind(VkDeviceSize offset)
     {
-        return vkBindBufferMemory(m_Device, m_Buffer, m_Memory, offset);
+        return vkBindBufferMemory(m_Device, m_Buffer, m_DeviceMemory, offset);
     }
 
     /**
@@ -85,7 +85,7 @@ namespace vk
     {
         VkMappedMemoryRange mappedRange = {};
         mappedRange.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
-        mappedRange.memory = m_Memory;
+        mappedRange.memory = m_DeviceMemory;
         mappedRange.offset = offset;
         mappedRange.size = size;
         return vkFlushMappedMemoryRanges(m_Device, 1, &mappedRange);
@@ -105,7 +105,7 @@ namespace vk
     {
         VkMappedMemoryRange mappedRange = {};
         mappedRange.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
-        mappedRange.memory = m_Memory;
+        mappedRange.memory = m_DeviceMemory;
         mappedRange.offset = offset;
         mappedRange.size = size;
         return vkInvalidateMappedMemoryRanges(m_Device, 1, &mappedRange);
@@ -120,9 +120,9 @@ namespace vk
         {
             vkDestroyBuffer(m_Device, m_Buffer, nullptr);
         }
-        if (m_Memory)
+        if (m_DeviceMemory)
         {
-            vkFreeMemory(m_Device, m_Memory, nullptr);
+            vkFreeMemory(m_Device, m_DeviceMemory, nullptr);
         }
     }
 };

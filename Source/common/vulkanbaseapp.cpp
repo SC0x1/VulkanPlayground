@@ -6,15 +6,6 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-//#define STB_IMAGE_IMPLEMENTATION
-//#include <stb_image.h>
-//
-//#define TINYOBJLOADER_IMPLEMENTATION
-//#include <tiny_obj_loader.h>
-//
-//const std::string MODEL_PATH = "Models/viking_room.obj";
-//const std::string TEXTURE_PATH = "Textures/viking_room.png";
-
 static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
     VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
     VkDebugUtilsMessageTypeFlagsEXT messageType,
@@ -95,7 +86,7 @@ void VulkanBaseApp::Run()
 
 void VulkanBaseApp::InitializeVulkan()
 {
-    CreateInstance();
+    CreateVulkanInstance();
     SetupDebugMessenger();
     CreateSurface();
     PickPhysicalDevice();
@@ -218,8 +209,9 @@ void VulkanBaseApp::PrepeareFrame()
     if (result == VK_ERROR_OUT_OF_DATE_KHR)
     {
         /*
-        VK_ERROR_OUT_OF_DATE_KHR: The swap chain has become incompatible with the surface and can no longer be used for rendering.
-        Usually happens after a window resize. It can be returned by The vkAcquireNextImageKHR and vkQueuePresentKHR functions.
+        VK_ERROR_OUT_OF_DATE_KHR: The swap chain has become incompatible with the surface
+        and can no longer be used for rendering. Usually happens after a window resize.
+        It can be returned by The vkAcquireNextImageKHR and vkQueuePresentKHR functions.
         */
         RecreateSwapChain();
         return;
@@ -228,21 +220,27 @@ void VulkanBaseApp::PrepeareFrame()
     {
         /*
         VK_SUBOPTIMAL_KHR: The swap chain can still be used to successfully present to the surface,
-        but the surface properties are no longer matched exactly.It can be returned by The vkAcquireNextImageKHR and vkQueuePresentKHR functions.
+        but the surface properties are no longer matched exactly.
+        It can be returned by The vkAcquireNextImageKHR and vkQueuePresentKHR functions.
         */
         throw std::runtime_error("failed to acquire swap chain image!");
     }
     /*
-    The first two parameters of vkAcquireNextImageKHR are the logical device and the swap chain from which we wish to acquire an image.
+    The first two parameters of vkAcquireNextImageKHR are the logical device and
+    the swap chain from which we wish to acquire an image.
     The third parameter specifies a timeout in nanoseconds for an image to become available.
     Using the maximum value of a 64 bit unsigned integer means we effectively disable the timeout.
 
-    The next two parameters specify synchronization objects that are to be signaled when the presentation engine is finished using the image.
-    That's the point in time where we can start drawing to it. It is possible to specify a semaphore, fence or both.
+    The next two parameters specify synchronization objects that are to be signaled when
+    the presentation engine is finished using the image.
+    That's the point in time where we can start drawing to it.
+    It is possible to specify a semaphore, fence or both.
     We're going to use our imageAvailableSemaphore for that purpose here.
 
-    The last parameter specifies a variable to output the index of the swap chain image that has become available.
-    The index refers to the VkImage in our swapChainImages array. We're going to use that index to pick the VkFrameBuffer.
+    The last parameter specifies a variable to output the index
+    of the swap chain image that has become available.
+    The index refers to the VkImage in our swapChainImages array.
+    We're going to use that index to pick the VkFrameBuffer.
     */
 }
 
@@ -334,16 +332,18 @@ void VulkanBaseApp::SubmitFrame()
     */
     presentInfo.pResults = nullptr; // Optional
     /*
-    There is one last optional parameter called pResults. It allows you to specify an array of VkResult values
+    There is one last optional parameter called pResults.
+    It allows you to specify an array of VkResult values
     to check for every individual swap chain if presentation was successful.
-    It's not necessary if you're only using a single swap chain, because you can simply use the return value of the present function.
+    It's not necessary if you're only using a single swap chain,
+    because you can simply use the return value of the present function.
     */
 
     VkResult result;
     result = vkQueuePresentKHR(m_PresentQueue, &presentInfo);
-    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || m_IsFamebufferResized)
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || m_IsFramebufferResized)
     {
-        m_IsFamebufferResized = false;
+        m_IsFramebufferResized = false;
         RecreateSwapChain();
     }
     else if (result != VK_SUCCESS)
@@ -355,7 +355,7 @@ void VulkanBaseApp::SubmitFrame()
     */
 }
 
-void VulkanBaseApp::CreateInstance()
+void VulkanBaseApp::CreateVulkanInstance()
 {
     if (m_EnableValidationLayers && !CheckValidationLayerSupport())
     {
@@ -416,22 +416,21 @@ void VulkanBaseApp::CreateInstance()
 void VulkanBaseApp::CreateSurface()
 {
     // Platform specific creation of the surface
-    /*
-        VkWin32SurfaceCreateInfoKHR createInfo{};
-        createInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
-        createInfo.hwnd = glfwGetWin32Window(m_Window);
-        createInfo.hinstance = GetModuleHandle(nullptr);
-
-        if (vkCreateWin32SurfaceKHR(m_Instance, &createInfo, nullptr, &m_Surface) != VK_SUCCESS)
-        {
-            throw std::runtime_error("failed to create window surface!");
-        }
-    */
-
-    if (glfwCreateWindowSurface(m_Instance, m_Window, nullptr, &m_Surface) != VK_SUCCESS)
+    VkResult err = VK_SUCCESS;
+    VkWin32SurfaceCreateInfoKHR createInfo{};
+    createInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
+    createInfo.hwnd = glfwGetWin32Window(m_Window);
+    createInfo.hinstance = GetModuleHandle(nullptr);
+    err = vkCreateWin32SurfaceKHR(m_Instance, &createInfo, nullptr, &m_Surface);
+    if (err != VK_SUCCESS)
     {
         throw std::runtime_error("failed to create window surface!");
     }
+
+    //if (glfwCreateWindowSurface(m_Instance, m_Window, nullptr, &m_Surface) != VK_SUCCESS)
+    //{
+    //    throw std::runtime_error("failed to create window surface!");
+    //}
 }
 
 void VulkanBaseApp::SetupDebugMessenger()
@@ -492,10 +491,14 @@ void VulkanBaseApp::PickPhysicalDevice()
 
 void VulkanBaseApp::CreateLogicalDevice()
 {
-    const QueueFamilyIndices indices = FindQueueFamilies(m_PhysicalDevice);
+    m_QueFamilyndices = VkUtils::FindQueueFamilies(m_PhysicalDevice, m_Surface);
 
     std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
-    std::set<uint32_t> uniqueQueueFamilies = { indices.graphicsFamily.value(), indices.presentFamily.value() };
+    std::set<uint32_t> uniqueQueueFamilies =
+    {
+        m_QueFamilyndices.graphicsFamily.value(),
+        m_QueFamilyndices.presentFamily.value()
+    };
 
     float queuePriority = 1.0f;
     for (uint32_t queueFamily : uniqueQueueFamilies)
@@ -540,8 +543,8 @@ void VulkanBaseApp::CreateLogicalDevice()
         throw std::runtime_error("failed to create logical device!");
     }
 
-    vkGetDeviceQueue(m_Device, indices.graphicsFamily.value(), 0, &m_GraphicsQueue);
-    vkGetDeviceQueue(m_Device, indices.presentFamily.value(), 0, &m_PresentQueue);
+    vkGetDeviceQueue(m_Device, m_QueFamilyndices.graphicsFamily.value(), 0, &m_GraphicsQueue);
+    vkGetDeviceQueue(m_Device, m_QueFamilyndices.presentFamily.value(), 0, &m_PresentQueue);
 }
 
 void VulkanBaseApp::CreateSwapChain()
@@ -582,7 +585,7 @@ void VulkanBaseApp::CreateSwapChain()
     createInfo.imageArrayLayers = 1;
     createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
-    const QueueFamilyIndices indices = FindQueueFamilies(m_PhysicalDevice);
+    const QueueFamilyIndices indices = VkUtils::FindQueueFamilies(m_PhysicalDevice, m_Surface);
     const uint32_t queueFamilyIndices[] = { indices.graphicsFamily.value(), indices.presentFamily.value() };
 
     if (indices.graphicsFamily != indices.presentFamily)
@@ -907,7 +910,7 @@ void VulkanBaseApp::CreateFramebuffers()
 
 void VulkanBaseApp::CreateCommandPool()
 {
-    const QueueFamilyIndices queueFamilyIndices = FindQueueFamilies(m_PhysicalDevice);
+    const QueueFamilyIndices queueFamilyIndices = VkUtils::FindQueueFamilies(m_PhysicalDevice, m_Surface);
 
     VkCommandPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -1052,23 +1055,7 @@ VkImageView VulkanBaseApp::CreateImageView(VkImage image, VkFormat format, VkIma
     return imageView;
 }
 
-VkShaderModule VulkanBaseApp::CreateShaderModule(const std::vector<char>& code) const
-{
-    VkShaderModuleCreateInfo createInfo{};
-    createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-    createInfo.codeSize = code.size();
-    createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
-
-    VkShaderModule shaderModule;
-    if (vkCreateShaderModule(m_Device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS)
-    {
-        throw std::runtime_error("failed to create shader module!");
-    }
-
-    return shaderModule;
-}
-
-void VulkanBaseApp::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory)
+void VulkanBaseApp::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& deviceMemory)
 {
     VkBufferCreateInfo bufferInfo{};
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -1087,14 +1074,14 @@ void VulkanBaseApp::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, Vk
     VkMemoryAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     allocInfo.allocationSize = memRequirements.size;
-    allocInfo.memoryTypeIndex = FindMemoryType(memRequirements.memoryTypeBits, properties);
+    allocInfo.memoryTypeIndex = VkUtils::FindMemoryType(m_PhysicalDevice, memRequirements.memoryTypeBits, properties);
 
-    if (vkAllocateMemory(m_Device, &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS)
+    if (vkAllocateMemory(m_Device, &allocInfo, nullptr, &deviceMemory) != VK_SUCCESS)
     {
         throw std::runtime_error("failed to allocate buffer memory!");
     }
 
-    vkBindBufferMemory(m_Device, buffer, bufferMemory, 0);
+    vkBindBufferMemory(m_Device, buffer, deviceMemory, 0);
 }
 
 void VulkanBaseApp::CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size)
@@ -1147,7 +1134,7 @@ void VulkanBaseApp::CreateImage(uint32_t width, uint32_t height, uint32_t mipLev
     VkMemoryAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     allocInfo.allocationSize = memRequirements.size;
-    allocInfo.memoryTypeIndex = FindMemoryType(memRequirements.memoryTypeBits, properties);
+    allocInfo.memoryTypeIndex = VkUtils::FindMemoryType(m_PhysicalDevice, memRequirements.memoryTypeBits, properties);
 
     if (vkAllocateMemory(m_Device, &allocInfo, nullptr, &imageMemory) != VK_SUCCESS)
     {
@@ -1581,63 +1568,6 @@ VkExtent2D VulkanBaseApp::ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capab
     }
 }
 
-QueueFamilyIndices VulkanBaseApp::FindQueueFamilies(VkPhysicalDevice device) const
-{
-    QueueFamilyIndices indices;
-    // Assign index to queue families that could be found
-    uint32_t queueFamilyCount = 0;
-    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
-    std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
-    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
-
-    int i = 0;
-    for (const auto& queueFamily : queueFamilies)
-    {
-        if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
-        {
-            indices.graphicsFamily = i;
-        }
-
-        VkBool32 presentSupport = false;
-        vkGetPhysicalDeviceSurfaceSupportKHR(device, i, m_Surface, &presentSupport);
-        if (presentSupport)
-        {
-            indices.presentFamily = i;
-        }
-
-        if (indices.IsComplete())
-        {
-            break;
-        }
-
-        i++;
-    }
-
-    return indices;
-}
-
-uint32_t VulkanBaseApp::FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties)
-{
-    VkPhysicalDeviceMemoryProperties memProperties;
-    vkGetPhysicalDeviceMemoryProperties(m_PhysicalDevice, &memProperties);
-
-    for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++)
-    {
-        if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties)
-        {
-            return i;
-        }
-    }
-    /*
-    The memoryTypes array consists of VkMemoryType structs that specify the heap and properties of each type of memory.
-    The properties define special features of the memory, like being able to map it so we can write to it from the CPU.
-    This property is indicated with VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-    but we also need to use the VK_MEMORY_PROPERTY_HOST_COHERENT_BIT property.
-    */
-
-    throw std::runtime_error("failed to find suitable memory type!");
-}
-
 VkFormat VulkanBaseApp::FindSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features) const
 {
     for (VkFormat format : candidates)
@@ -1680,7 +1610,7 @@ int VulkanBaseApp::RateDeviceSuitability(VkPhysicalDevice device) const
 {
     int score = 0;
     // Checks the necessary queue family
-    const QueueFamilyIndices indices = FindQueueFamilies(device);
+    const QueueFamilyIndices indices = VkUtils::FindQueueFamilies(device, m_Surface);
 
     if (indices.IsComplete() == false)
     {
@@ -1746,7 +1676,7 @@ int VulkanBaseApp::RateDeviceSuitability(VkPhysicalDevice device) const
 void VulkanBaseApp::FramebufferResizeCallback(GLFWwindow* window, int width, int height)
 {
     auto app = reinterpret_cast<VulkanBaseApp*>(glfwGetWindowUserPointer(window));
-    app->m_IsFamebufferResized = true;
+    app->m_IsFramebufferResized = true;
 }
 
 void VulkanBaseApp::SetCurrentDirectory()

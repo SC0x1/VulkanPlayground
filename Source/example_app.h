@@ -83,8 +83,7 @@ struct UniformBufferObject
 class VulkanExample : public VulkanBaseApp
 {
 public:
-    VulkanExample();
-    ~VulkanExample();
+    QB_SINGLETON_GENERIC_METHODS(, VulkanExample);
 
 private:
     virtual void InitializeVulkan() override;

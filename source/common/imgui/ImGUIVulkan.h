@@ -1,7 +1,7 @@
 #pragma once
 
-#include "base/vkbuffer.h"
-#include "base/vkdevice.h"
+#include "vulkan/vkbuffer.h"
+#include "vulkan/vkdevice.h"
 
 class VulkanBaseApp;
 
@@ -9,7 +9,7 @@ class VulkanImGUI
 {
 public:
 
-    void Initialize();
+    bool Initialize();
     void Shutdown();
 
     void BeginFrame();
@@ -34,6 +34,5 @@ private:
     vk::VulkanDevice* device;
     VkPhysicalDeviceDriverProperties driverProperties = {};
     VulkanBaseApp* example;
-
 };
 

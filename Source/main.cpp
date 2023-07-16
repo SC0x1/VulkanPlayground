@@ -4,7 +4,8 @@
 
 int main()
 {
-    VulkanExample app;
+    VulkanExample::CreateInstance();
+    VulkanExample& app = *VulkanExample::GetInstance();
 
     try
     {
@@ -15,6 +16,8 @@ int main()
         std::cerr << e.what() << std::endl;
         return EXIT_FAILURE;
     }
+
+    VulkanExample::DestroyInstance();
 
     return 0;
 }

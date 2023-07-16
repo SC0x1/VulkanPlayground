@@ -1,6 +1,6 @@
 #pragma once
 
-#include "VkHelper.h"
+#include "vkutils.h"
 
 #include "VkBuffer.h"
 
@@ -17,11 +17,8 @@ struct VulkanDevice
     VkDevice m_LogicalDevice;
 
     VkPhysicalDeviceProperties m_Properties;
-
     VkPhysicalDeviceFeatures m_Features;
-
     VkPhysicalDeviceFeatures m_EnabledFeatures;
-
     VkPhysicalDeviceMemoryProperties m_MemoryProperties;
 
     std::vector<VkQueueFamilyProperties> m_QueueFamilyProperties;

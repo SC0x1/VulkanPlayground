@@ -5,7 +5,7 @@
 
 #include <stdexcept>
 
-#include <base/vkdevice.h>
+#include <vulkan/vkdevice.h>
 
 #include <unordered_set>
 
@@ -403,7 +403,7 @@ VkResult VulkanDevice::CreateBuffer(VkBufferUsageFlags usageFlags, VkMemoryPrope
         memAlloc.pNext = &allocFlagsInfo;
     }
 
-    VK_CHECK_RESULT(vkAllocateMemory(m_LogicalDevice, &memAlloc, nullptr, &buffer->m_Memory));
+    VK_CHECK_RESULT(vkAllocateMemory(m_LogicalDevice, &memAlloc, nullptr, &buffer->m_DeviceMemory));
 
     buffer->m_Alignment = memReqs.alignment;
     buffer->m_Size = size;
