@@ -64,7 +64,7 @@ bool VulkanImGUI::Initialize()
     pool_info.pPoolSizes = pool_sizes;
 
     VkDevice device = app.GetVkDevice();
-    VK_CHECK_RESULT(vkCreateDescriptorPool(device, &pool_info, nullptr, &descriptorPool));
+    VK_CHECK(vkCreateDescriptorPool(device, &pool_info, nullptr, &descriptorPool));
 
     // Setup Platform/Renderer bindings
     // BOOKMARK: ImGui

@@ -932,7 +932,7 @@ void VulkanBaseApp::CreateColorResources()
 {
     const VkFormat colorFormat = m_SwapChainImageFormat;
 
-    CreateImage(m_SwapChainExtent.width, m_SwapChainExtent.height, 1, m_MsaaSamples, colorFormat,
+    VkUtils::CreateImage(m_Device, m_PhysicalDevice, m_SwapChainExtent.width, m_SwapChainExtent.height, 1, m_MsaaSamples, colorFormat,
         VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_ColorImage, m_ColorImageMemory);
 
@@ -943,7 +943,7 @@ void VulkanBaseApp::CreateDepthResources()
 {
     const VkFormat depthFormat = FindDepthFormat();
 
-    CreateImage(m_SwapChainExtent.width, m_SwapChainExtent.height, 1, m_MsaaSamples, depthFormat,
+    VkUtils::CreateImage(m_Device, m_PhysicalDevice, m_SwapChainExtent.width, m_SwapChainExtent.height, 1, m_MsaaSamples, depthFormat,
         VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_DepthImage, m_DepthImageMemory);
 
     m_DepthImageView = CreateImageView(m_DepthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
@@ -1055,35 +1055,6 @@ VkImageView VulkanBaseApp::CreateImageView(VkImage image, VkFormat format, VkIma
     return imageView;
 }
 
-void VulkanBaseApp::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& deviceMemory)
-{
-    VkBufferCreateInfo bufferInfo{};
-    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    bufferInfo.size = size;
-    bufferInfo.usage = usage;
-    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-    if (vkCreateBuffer(m_Device, &bufferInfo, nullptr, &buffer) != VK_SUCCESS)
-    {
-        throw std::runtime_error("failed to create buffer!");
-    }
-
-    VkMemoryRequirements memRequirements;
-    vkGetBufferMemoryRequirements(m_Device, buffer, &memRequirements);
-
-    VkMemoryAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    allocInfo.allocationSize = memRequirements.size;
-    allocInfo.memoryTypeIndex = VkUtils::FindMemoryType(m_PhysicalDevice, memRequirements.memoryTypeBits, properties);
-
-    if (vkAllocateMemory(m_Device, &allocInfo, nullptr, &deviceMemory) != VK_SUCCESS)
-    {
-        throw std::runtime_error("failed to allocate buffer memory!");
-    }
-
-    vkBindBufferMemory(m_Device, buffer, deviceMemory, 0);
-}
-
 void VulkanBaseApp::CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size)
 {
     const VkCommandBuffer commandBuffer = BeginSingleTimeCommands();
@@ -1095,53 +1066,6 @@ void VulkanBaseApp::CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceS
     vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
 
     EndSingleTimeCommands(commandBuffer);
-}
-
-void VulkanBaseApp::CreateImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory)
-{
-    VkImageCreateInfo imageInfo{};
-    imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    imageInfo.imageType = VK_IMAGE_TYPE_2D;
-    imageInfo.extent.width = width;
-    imageInfo.extent.height = height;
-    imageInfo.extent.depth = 1;
-    imageInfo.mipLevels = mipLevels;
-    imageInfo.arrayLayers = 1;
-    imageInfo.format = format;
-    imageInfo.tiling = tiling;
-    imageInfo.usage = usage;
-    /*
-    The usage field has the same semantics as the one during buffer creation.
-    The image is going to be used as destination for the buffer copy, so it should be set up as a transfer destination.
-    We also want to be able to access the image from the shader to color our mesh, so the usage should include VK_IMAGE_USAGE_SAMPLED_BIT
-    */
-    imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    /*
-    The image will only be used by one queue family: the one that supports graphics (and therefore also) transfer operations.
-    */
-
-    imageInfo.samples = numSamples;
-    imageInfo.flags = 0; // Optional
-
-    if (vkCreateImage(m_Device, &imageInfo, nullptr, &image) != VK_SUCCESS)
-    {
-        throw std::runtime_error("failed to create image!");
-    }
-
-    VkMemoryRequirements memRequirements;
-    vkGetImageMemoryRequirements(m_Device, image, &memRequirements);
-
-    VkMemoryAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    allocInfo.allocationSize = memRequirements.size;
-    allocInfo.memoryTypeIndex = VkUtils::FindMemoryType(m_PhysicalDevice, memRequirements.memoryTypeBits, properties);
-
-    if (vkAllocateMemory(m_Device, &allocInfo, nullptr, &imageMemory) != VK_SUCCESS)
-    {
-        throw std::runtime_error("failed to allocate image memory!");
-    }
-
-    vkBindImageMemory(m_Device, image, imageMemory, 0);
 }
 
 void VulkanBaseApp::CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height)

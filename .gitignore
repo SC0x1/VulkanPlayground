@@ -125,20 +125,21 @@ ipch/
 # Project files
 binaries/*
 intermediate/*
-externals/*
+external/*
 
 # Exclude submodules
-!/externals/fmt
-!/externals/bstrlib
-!/externals/glm
-!/externals/glfw
-!/externals/imgui
-!/externals/stblib
-!/externals/turf
-!/externals/assimp
-!/externals/stb
-!/externals/tinyobjloader
-!/externals/ImGuizmo
+!/external/fmt
+!/external/bstrlib
+!/external/glm
+!/external/glfw
+!/external/imgui
+!/external/stblib
+!/external/turf
+!/external/assimp
+!/external/stb
+!/external/tinyobjloader
+!/external/ImGuizmo
+!/external/glslang
 
 Data/*
 !/Data/Screenshots/

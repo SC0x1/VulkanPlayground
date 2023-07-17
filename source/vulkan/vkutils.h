@@ -19,9 +19,15 @@
 
 #define DEFAULT_FENCE_TIMEOUT 100000000000
 
-#define VK_CHECK_RESULT(f) { VkResult result = (f);     \
+
+#define VK_CHECK(f) { VkResult result = (f);            \
     VkUtils::CheckVkResult(result, __FILE__, __LINE__); \
  }
+
+#define VK_CHECK_RET(f) { VkResult result = (f);        \
+    VkUtils::CheckVkResult(result, __FILE__, __LINE__); \
+    return result;                                      \
+}
 
 struct QueueFamilyIndices
 {
@@ -127,6 +133,9 @@ namespace VkUtils
     {
         return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT;
     }
+
+    void CreateBuffer(VkDevice device, VkPhysicalDevice physicalDevice, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
+    void CreateImage(VkDevice device, VkPhysicalDevice physicalDevice, uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
 
     VkResult CreateShaderModule(VkDevice device, const std::vector<char>& code, VkShaderModule& vkShaderModule);
 }

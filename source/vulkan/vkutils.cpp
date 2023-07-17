@@ -76,6 +76,70 @@ namespace VkUtils
         return 0xFFFFFFFF;
     }
 
+    void CreateBuffer(VkDevice device, VkPhysicalDevice physicalDevice, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory)
+    {
+        VkBufferCreateInfo bufferInfo{};
+        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufferInfo.size = size;
+        bufferInfo.usage = usage;
+        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+        VK_CHECK(vkCreateBuffer(device, &bufferInfo, nullptr, &buffer));
+
+        VkMemoryRequirements memRequirements;
+        vkGetBufferMemoryRequirements(device, buffer, &memRequirements);
+
+        VkMemoryAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        allocInfo.allocationSize = memRequirements.size;
+        allocInfo.memoryTypeIndex = VkUtils::FindMemoryType(physicalDevice, memRequirements.memoryTypeBits, properties);
+
+        VK_CHECK(vkAllocateMemory(device, &allocInfo, nullptr, &bufferMemory));
+
+        vkBindBufferMemory(device, buffer, bufferMemory, 0);
+    }
+
+    void CreateImage(VkDevice device, VkPhysicalDevice physicalDevice, uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory)
+    {
+        VkImageCreateInfo imageInfo{};
+        imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+        imageInfo.imageType = VK_IMAGE_TYPE_2D;
+        imageInfo.extent.width = width;
+        imageInfo.extent.height = height;
+        imageInfo.extent.depth = 1;
+        imageInfo.mipLevels = mipLevels;
+        imageInfo.arrayLayers = 1;
+        imageInfo.format = format;
+        imageInfo.tiling = tiling;
+        imageInfo.usage = usage;
+        /*
+        The usage field has the same semantics as the one during buffer creation.
+        The image is going to be used as destination for the buffer copy, so it should be set up as a transfer destination.
+        We also want to be able to access the image from the shader to color our mesh, so the usage should include VK_IMAGE_USAGE_SAMPLED_BIT
+        */
+        imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        /*
+        The image will only be used by one queue family: the one that supports graphics (and therefore also) transfer operations.
+        */
+
+        imageInfo.samples = numSamples;
+        imageInfo.flags = 0; // Optional
+
+        VK_CHECK(vkCreateImage(device, &imageInfo, nullptr, &image));
+
+        VkMemoryRequirements memRequirements;
+        vkGetImageMemoryRequirements(device, image, &memRequirements);
+
+        VkMemoryAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        allocInfo.allocationSize = memRequirements.size;
+        allocInfo.memoryTypeIndex = VkUtils::FindMemoryType(physicalDevice, memRequirements.memoryTypeBits, properties);
+
+        VK_CHECK(vkAllocateMemory(device, &allocInfo, nullptr, &imageMemory));
+
+        vkBindImageMemory(device, image, imageMemory, 0);
+    }
+
     VkResult CreateShaderModule(VkDevice device, const std::vector<char>& code, VkShaderModule& vkShaderModule)
     {
         VkShaderModuleCreateInfo createInfo{};
@@ -83,9 +147,7 @@ namespace VkUtils
         createInfo.codeSize = code.size();
         createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
 
-        VkResult result = vkCreateShaderModule(device, &createInfo, nullptr, &vkShaderModule);
-
-        return result;
+        VK_CHECK_RET(vkCreateShaderModule(device, &createInfo, nullptr, &vkShaderModule));
     }
 
 }

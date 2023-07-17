@@ -1,36 +1,44 @@
-[submodule "Externals/fmt"]
-    path = Externals/fmt
-    url = https://github.com/fmtlib/fmt
-    branch = master
-
-[submodule "Externals/bstrlib"]
-    path = Externals/bstrlib
-    url = https://github.com/websnarf/bstrlib
-
-[submodule "Externals/glm"]
-    path = Externals/glm
-    url = https://github.com/g-truc/glm
-
-[submodule "Externals/glfw"]
-    path = Externals/glfw
+[submodule "external/glfw"]
+	path = external/glfw
     url = https://github.com/glfw/glfw
 
-[submodule "Externals/imgui"]
-    path = Externals/imgui
+[submodule "external/imgui"]
+	path = external/imgui
     url = https://github.com/ocornut/imgui
 
-[submodule "Externals/stblib"]
-    path = Externals/stblib
+[submodule "external/stblib"]
+	path = external/stblib
     url = https://github.com/nothings/stb
 
-[submodule "Externals/turf"]
-    path = Externals/turf
+[submodule "external/turf"]
+	path = external/turf
     url = https://github.com/preshing/turf
 
-[submodule "Externals/assimp"]
-    path = Externals/assimp
-    url = https://github.com/assimp/assimp
-[submodule "Externals/ImGuizmo"]
-	path = Externals/ImGuizmo
+[submodule "external/ImGuizmo"]
+	path = external/ImGuizmo
 	url = https://github.com/CedricGuillemet/ImGuizmo.git
+    branch = master
+
+[submodule "external/fmt"]
+	path = external/fmt
+	url = https://github.com/fmtlib/fmt
 	branch = master
+
+[submodule "external/bstrlib"]
+	path = external/bstrlib
+	url = https://github.com/websnarf/bstrlib
+	branch = master
+
+[submodule "external/glm"]
+	path = external/glm
+	url = https://github.com/g-truc/glm.git
+	branch = master
+
+[submodule "external/assimp"]
+    path = external/assimp
+    url = https://github.com/assimp/assimp
+
+[submodule "external/glslang"]
+	path = external/glslang
+	url = https://github.com/KhronosGroup/glslang
+	branch = main

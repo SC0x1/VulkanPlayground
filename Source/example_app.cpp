@@ -148,9 +148,9 @@ void VulkanExample::CreateGraphicsPipeline()
     ReadFile(pathFrag.c_str(), fragShaderCode);
 
     VkShaderModule vertShaderModule;
-    VK_CHECK_RESULT(VkUtils::CreateShaderModule(m_Device, vertShaderCode, vertShaderModule));
+    VK_CHECK(VkUtils::CreateShaderModule(m_Device, vertShaderCode, vertShaderModule));
     VkShaderModule fragShaderModule;
-    VK_CHECK_RESULT(VkUtils::CreateShaderModule(m_Device, fragShaderCode, fragShaderModule));
+    VK_CHECK(VkUtils::CreateShaderModule(m_Device, fragShaderCode, fragShaderModule));
 
     VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
     vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -423,7 +423,7 @@ void VulkanExample::CreateTextureImage()
     VkBuffer stagingBuffer;
     VkDeviceMemory stagingBufferMemory;
 
-    CreateBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+    VkUtils::CreateBuffer(m_Device, m_PhysicalDevice, imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
 
     void* data;
@@ -433,7 +433,7 @@ void VulkanExample::CreateTextureImage()
 
     stbi_image_free(pixels);
 
-    CreateImage(texWidth, texHeight, m_MipLevels, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R8G8B8A8_SRGB,
+    VkUtils::CreateImage(m_Device, m_PhysicalDevice, texWidth, texHeight, m_MipLevels, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R8G8B8A8_SRGB,
         VK_IMAGE_TILING_OPTIMAL,
         VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_TextureImage, m_TextureImageMemory);
 
@@ -530,14 +530,15 @@ void VulkanExample::CreateVertexBuffer()
 
     VkBuffer stagingBuffer;
     VkDeviceMemory stagingBufferMemory;
-    CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+    
+    VkUtils::CreateBuffer(m_Device, m_PhysicalDevice, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
 
     void* data;
     vkMapMemory(m_Device, stagingBufferMemory, 0, bufferSize, 0, &data);
     memcpy(data, m_Vertices.data(), (size_t)bufferSize);
     vkUnmapMemory(m_Device, stagingBufferMemory);
 
-    CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_VertexBuffer, m_VertexBufferMemory);
+    VkUtils::CreateBuffer(m_Device, m_PhysicalDevice, bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_VertexBuffer, m_VertexBufferMemory);
 
     CopyBuffer(stagingBuffer, m_VertexBuffer, bufferSize);
 
@@ -562,14 +563,14 @@ void VulkanExample::CreateIndexBuffer()
 
     VkBuffer stagingBuffer;
     VkDeviceMemory stagingBufferMemory;
-    CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+    VkUtils::CreateBuffer(m_Device, m_PhysicalDevice, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
 
     void* data;
     vkMapMemory(m_Device, stagingBufferMemory, 0, bufferSize, 0, &data);
     memcpy(data, m_Indices.data(), (size_t)bufferSize);
     vkUnmapMemory(m_Device, stagingBufferMemory);
 
-    CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_IndexBuffer, m_IndexBufferMemory);
+    VkUtils::CreateBuffer(m_Device, m_PhysicalDevice, bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_IndexBuffer, m_IndexBufferMemory);
 
     CopyBuffer(stagingBuffer, m_IndexBuffer, bufferSize);
 
@@ -587,7 +588,7 @@ void VulkanExample::CreateUniformBuffers()
 
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
-        CreateBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+        VkUtils::CreateBuffer(m_Device, m_PhysicalDevice, bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
             m_UniformBuffers[i], m_UniformBuffersMemory[i]);
 
