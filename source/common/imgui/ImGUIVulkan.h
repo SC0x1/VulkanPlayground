@@ -1,7 +1,8 @@
 #pragma once
 
-#include "vulkan/vkbuffer.h"
-#include "vulkan/vkdevice.h"
+#include "vulkan/buffer.h"
+#include "vulkan/device.h"
+#include "vulkan/commandpool.h"
 
 class VulkanBaseApp;
 
@@ -9,30 +10,53 @@ class VulkanImGUI
 {
 public:
 
-    bool Initialize();
+    bool Initialize(VulkanBaseApp* app);
     void Shutdown();
 
-    void BeginFrame();
-    void EndFrame();
+    void StartFrame();
+
+    void OnRender(uint32_t imageIndex, VkCommandBuffer cmdBuffer = VK_NULL_HANDLE);
+
+    void OnRecreateSwapchain();
+
+    VkCommandBuffer GetCommandBuffer(uint32_t frameID) const;
 
 private:
-    // Vulkan resources for rendering the UI
-    VkSampler sampler;
-    vk::Buffer vertexBuffer;
-    vk::Buffer indexBuffer;
-    int32_t vertexCount = 0;
-    int32_t indexCount = 0;
-    VkDeviceMemory fontMemory = VK_NULL_HANDLE;
-    VkImage fontImage = VK_NULL_HANDLE;
-    VkImageView fontView = VK_NULL_HANDLE;
-    VkPipelineCache pipelineCache;
-    VkPipelineLayout pipelineLayout;
-    VkPipeline pipeline;
-    VkDescriptorPool descriptorPool;
-    VkDescriptorSetLayout descriptorSetLayout;
-    VkDescriptorSet descriptorSet;
-    vk::VulkanDevice* device;
-    VkPhysicalDeviceDriverProperties driverProperties = {};
-    VulkanBaseApp* example;
+
+    void RenderImGuiFrame(uint32_t imageIndex, uint32_t frameIdx, ImDrawData* draw_data);
+
+    void RecordCommandBuffer(VkCommandBuffer cmdBuffer, uint32_t imageIndex, ImDrawData* draw_data);
+
+    void CreateRenderPass();
+    void CreateDescriptorPool();
+    void CreateFramebuffers();
+    void CreateCommandBuffers();
+
+    void CreateCommandPool();
+    void DestroyCommandPool();
+
+    void CreateSyncObjects();
+    void DestroySyncObjects();
+
+    ImGuiContext* m_ImGuiContext{ nullptr };
+
+    std::vector<VkFramebuffer> m_Framebuffers;
+
+    VkDescriptorPool m_DescriptorPool{ VK_NULL_HANDLE };
+
+    //std::vector<Vk::CommandPool> m_CommandPools;
+    Vk::CommandPool m_CommandPool;
+    std::vector<VkCommandBuffer> m_CommandBuffers;
+
+    VkRenderPass m_RenderPass{ VK_NULL_HANDLE };
+
+    std::vector<VkSemaphore> m_RenderFinishedSemaphores;
+
+    VulkanBaseApp* m_App = nullptr;
 };
 
+inline VkCommandBuffer VulkanImGUI::GetCommandBuffer(uint32_t frameID) const
+{
+    return m_CommandBuffers[frameID];
+}
+ 

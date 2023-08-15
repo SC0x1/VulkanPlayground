@@ -1,19 +1,17 @@
 #pragma once
 
 #include "base/singleton.h"
-#include "vulkan/vkutils.h"
+#include "vulkan/utils.h"
+#include "vulkan/framesinflight.h"
+#include "vulkan/swapchain.h"
+#include "vulkan/surface.h"
 
-struct SwapChainSupportDetails
-{
-    VkSurfaceCapabilitiesKHR capabilities;
-    std::vector<VkSurfaceFormatKHR> formats;
-    std::vector<VkPresentModeKHR> presentModes;
-};
+#include "common/imgui/ImGUIVulkan.h"
 
 class VulkanBaseApp 
 {
 public:
-    const int MAX_FRAMES_IN_FLIGHT = 2;
+    uint32_t m_MaxFramesInFlight = 2;
 
     // is measured in screen coordinates
     // But Vulkan works with pixels
@@ -28,31 +26,42 @@ public:
 
     void Run();
 
-    virtual void InitializeVulkan();
+    virtual void OnInitialize();
+    virtual void OnCleanup();
+
+    virtual void OnRecreateSwapchain() = 0;
 
     void MainLoop();
 
-    virtual void Cleanup();
-
     void InitWindow();
 
-    void PrepeareFrame();
-    void SubmitFrame();
+    void PresentFrame(Vk::SyncObject syncObject, uint32_t imageIndex, uint32_t frameIdx);
 
-    virtual void Render() = 0;
+    virtual void OnRender() = 0;
     virtual void UpdateUniformBuffer(uint32_t frameIdx) = 0;
+
+    VkCommandBuffer BeginSingleTimeCommands();
+    void EndSingleTimeCommands(VkCommandBuffer commandBuffer);
 
     // Utils
     void* GetWindowHandle() const { return m_Window; }
 
     // Vulkan data
-    VkInstance GetVkInstance() const { return m_Instance; }
-    VkPhysicalDevice GetVkPhysicalDevice() const { return m_PhysicalDevice; }
-    VkDevice GetVkDevice() const { return m_Device; }
-    QueueFamilyIndices GetQueueFamilyIndices() const { return m_QueFamilyndices; }
-    VkQueue GetGraphicsQueue() const { return m_GraphicsQueue; }
-    uint32_t GetSwapChainImageCount() const { return (uint32_t)m_SwapChainImages.size(); }
-    VkRenderPass GetRenderPass() const { return m_RenderPass; }
+    VkInstance GetVkInstance() const;
+    VkPhysicalDevice GetVkPhysicalDevice() const;
+    VkDevice GetVkDevice() const;
+    Vk::QueueFamilyIndices GetQueueFamilyIndices() const;
+    VkQueue GetGraphicsQueue() const;
+    uint32_t GetSwapChainImageCount() const;
+    VkRenderPass GetRenderPass() const;
+    VkCommandPool GetCommandPool() const;
+    VkFormat GetSwapchainImageFormat() const;
+
+    VkExtent2D GetSwapChainExtend() const;
+    const std::vector<VkImage>& GetSwapChainImages() const;
+    const std::vector<VkImageView>& GetSwapChainImageViews() const;
+
+    uint32_t GetMaxFramesInFlight() const;
 
 protected:
 
@@ -64,35 +73,28 @@ protected:
     void SetupDebugMessenger();
     void PickPhysicalDevice();
     void CreateLogicalDevice();
-    void CreateSwapChain();
-    void RecreateSwapChain();
+    //void RecreateSwapchain();
     void CleanupSwapChain();
-    void CreateImageViews();
+
     void CreateRenderPass();
+
     void CreateFramebuffers();
     void CreateCommandPool();
     void CreateColorResources(); // MSAA image
     void CreateDepthResources(); // Depth image
-    void CreateSyncObjects();
-
-    VkCommandBuffer BeginSingleTimeCommands();
-    void EndSingleTimeCommands(VkCommandBuffer commandBuffer);
 
     bool CheckValidationLayerSupport() const;
+
     bool CheckDeviceExtensionSupport(VkPhysicalDevice device) const;
 
     std::vector<const char*> GetRequiredExtensions() const;
 
-    // Swap Chain
-    VkSurfaceFormatKHR ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats) const;
-    VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes) const;
-    VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities) const;
-    SwapChainSupportDetails QuerySwapChainSupport(VkPhysicalDevice device) const;
+    std::optional<uint32_t> AcquireNextImage(Vk::SyncObject syncObject);
 
     // MSAA
     VkSampleCountFlagBits GetMaxUsableSampleCount() const;
 
-    int RateDeviceSuitability(VkPhysicalDevice device) const;
+    int RateDeviceSuitability(VkPhysicalDevice physicalDvice) const;
 
     VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels) const;
 
@@ -113,28 +115,23 @@ protected:
 
 protected:
 
-
     GLFWwindow* m_Window = nullptr;
 
     VkInstance m_Instance;
 
     VkDebugUtilsMessengerEXT m_DebugMessenger;
-    VkSurfaceKHR m_Surface;
 
     VkPhysicalDevice m_PhysicalDevice = VK_NULL_HANDLE; // A Physical device
     VkDevice m_Device;                                  // A Logical device
-    QueueFamilyIndices m_QueFamilyndices;
+    Vk::QueueFamilyIndices m_QueFamilyndices;
     VkQueue m_GraphicsQueue;                            // Device queues are implicitly cleaned up when the device is destroyed
     VkQueue m_PresentQueue;
 
-    // Swap chain
-    std::vector<VkImage> m_SwapChainImages;
-    std::vector<VkImageView> m_SwapChainImageViews;
-    std::vector<VkFramebuffer> m_SwapChainFramebuffers;
+    Vk::Surface m_Surface;
 
-    VkSwapchainKHR m_SwapChain;
-    VkFormat m_SwapChainImageFormat;
-    VkExtent2D m_SwapChainExtent;
+    // Swap chain
+    Vk::SwapChain m_Swapchain;
+    std::vector<VkFramebuffer> m_SwapChainFramebuffers;
 
     VkRenderPass m_RenderPass;
 
@@ -154,13 +151,10 @@ protected:
 
     std::vector<VkCommandBuffer> m_CommandBuffers;
 
-    std::vector<VkSemaphore> m_ImageAvailableSemaphores;
-    std::vector<VkSemaphore> m_RenderFinishedSemaphores;
-    std::vector<VkFence> m_InFlightFences;
-
-    uint32_t m_CurrentFrameIdx = 0;
-
+    Vk::FramesInFlight m_FramesInFlight;
     uint32_t m_FrameBufferImageIndex = 0;
+
+    std::vector<VkFence> m_ImagesInFlight;
 
     const std::vector<const char*> m_ValidationLayers =
     {
@@ -172,6 +166,10 @@ protected:
         VK_KHR_SWAPCHAIN_EXTENSION_NAME
     };
 
+    // ImGui
+    VulkanImGUI m_ImGuiLayer;
+    bool m_IsImGuiEnabled = true;
+
 #ifdef NDEBUG
     const bool m_EnableValidationLayers = false;
 #else
@@ -180,3 +178,68 @@ protected:
 
     bool m_IsFramebufferResized = false;
 };
+
+inline VkInstance VulkanBaseApp::GetVkInstance() const
+{
+    return m_Instance;
+}
+
+inline VkPhysicalDevice VulkanBaseApp::GetVkPhysicalDevice() const
+{
+    return m_PhysicalDevice;
+}
+
+inline VkDevice VulkanBaseApp::GetVkDevice() const
+{
+    return m_Device;
+}
+
+inline Vk::QueueFamilyIndices VulkanBaseApp::GetQueueFamilyIndices() const
+{
+    return m_QueFamilyndices;
+}
+
+inline VkQueue VulkanBaseApp::GetGraphicsQueue() const
+{
+    return m_GraphicsQueue;
+}
+
+inline uint32_t VulkanBaseApp::GetSwapChainImageCount() const
+{
+    return (uint32_t)m_Swapchain.GetImages().size();
+}
+
+inline VkRenderPass VulkanBaseApp::GetRenderPass() const
+{
+    return m_RenderPass;
+}
+
+inline VkCommandPool VulkanBaseApp::GetCommandPool() const
+{
+    return m_CommandPool;
+}
+
+inline VkFormat VulkanBaseApp::GetSwapchainImageFormat() const
+{
+    return m_Swapchain.GetSurfaceFormat().format;
+}
+
+inline VkExtent2D VulkanBaseApp::GetSwapChainExtend() const
+{
+    return m_Swapchain.GetExtent();
+}
+
+inline const std::vector<VkImage>& VulkanBaseApp::GetSwapChainImages() const
+{
+    return m_Swapchain.GetImages();
+}
+
+inline const std::vector<VkImageView>& VulkanBaseApp::GetSwapChainImageViews() const
+{
+    return m_Swapchain.GetImageViews();
+}
+
+inline uint32_t VulkanBaseApp::GetMaxFramesInFlight() const
+{
+    return m_MaxFramesInFlight;
+}

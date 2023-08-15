@@ -86,10 +86,12 @@ public:
     QB_SINGLETON_GENERIC_METHODS(, VulkanExample);
 
 private:
-    virtual void InitializeVulkan() override;
-    virtual void Cleanup() override;
+    virtual void OnInitialize() override;
+    virtual void OnCleanup() override;
 
-    virtual void Render() override;
+    virtual void OnRender() override;
+
+    virtual void OnRecreateSwapchain() override;
 
     //////////////////////////////////////////////////////////////////////////
     /// Vulkan
@@ -109,7 +111,7 @@ private:
     void CreateDescriptorSets();
     void CreateCommandBuffers();
 
-    void RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) const;
+    void RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
     VkCommandBuffer BeginSingleTimeCommands();
     void EndSingleTimeCommands(VkCommandBuffer commandBuffer);

@@ -10,26 +10,73 @@
 #include <chrono>
 #include <thread>
 
-#include "vkconfig.h"
+#include "vulkan/config.h"
 
-#define vkSTART_NAMESPACE namespace vk {
+#define vkBEGIN_NAMESPACE namespace Vk {
 #define vkEND_NAMESPACE }
 
 #define VK_FLAGS_NONE 0
 
 #define DEFAULT_FENCE_TIMEOUT 100000000000
 
-
-#define VK_CHECK(f) { VkResult result = (f);            \
-    VkUtils::CheckVkResult(result, __FILE__, __LINE__); \
+#define VK_CHECK(f) { VkResult _result_ = (f); \
+    Vk::Utils::CheckVkResult(_result_, __FILE__, __LINE__);     \
  }
 
-#define VK_CHECK_RET(f) { VkResult result = (f);        \
-    VkUtils::CheckVkResult(result, __FILE__, __LINE__); \
-    return result;                                      \
+#define VK_CHECK_RET(f) { VkResult _result_ = (f);          \
+    Vk::Utils::CheckVkResult(_result_, __FILE__, __LINE__); \
+    return _result_;                                        \
 }
 
-struct QueueFamilyIndices
+vkBEGIN_NAMESPACE
+
+struct VulkanInstance final
+{
+    VkInstance instance;
+    VkSurfaceKHR surface;
+    VkDebugUtilsMessengerEXT messenger;
+    VkDebugReportCallbackEXT reportCallback;
+};
+
+struct VulkanRenderDevice final
+{
+    uint32_t framebufferWidth;
+    uint32_t framebufferHeight;
+
+    VkDevice device;
+    VkQueue graphicsQueue;
+    VkPhysicalDevice physicalDevice;
+
+    uint32_t graphicsFamily;
+
+    VkSwapchainKHR swapchain;
+    VkSemaphore semaphore;
+    VkSemaphore renderSemaphore;
+
+    std::vector<VkImage> swapchainImages;
+    std::vector<VkImageView> swapchainImageViews;
+
+    VkCommandPool commandPool;
+    std::vector<VkCommandBuffer> commandBuffers;
+
+    // For chapter5/6etc (compute shaders)
+
+    // Were we initialized with compute capabilities
+    bool useCompute = false;
+
+    // [may coincide with graphicsFamily]
+    uint32_t computeFamily;
+    VkQueue computeQueue;
+
+    // a list of all queues (for shared buffer allocation)
+    std::vector<uint32_t> deviceQueueIndices;
+    std::vector<VkQueue> deviceQueues;
+
+    VkCommandBuffer computeCommandBuffer;
+    VkCommandPool computeCommandPool;
+};
+
+struct QueueFamilyIndices final
 {
     std::optional<uint32_t> graphicsFamily;
     std::optional<uint32_t> presentFamily;
@@ -46,7 +93,14 @@ struct ShaderModule final
     VkShaderModule shaderModule = nullptr;
 };
 
-namespace VkUtils
+struct SyncObject final
+{
+    VkSemaphore imageAvailableSemaphore;
+    VkSemaphore renderFinishedSemaphore;
+    VkFence fence;
+};
+
+namespace Utils
 {
     inline const char* VKResultToString(VkResult result)
     {
@@ -99,7 +153,7 @@ namespace VkUtils
     {
         if (result != VK_SUCCESS)
         {
-            printf("VkResult is '%s'", VkUtils::VKResultToString(result));
+            printf("VkResult is '%s'", Utils::VKResultToString(result));
 
             if (result == VK_ERROR_DEVICE_LOST)
             {
@@ -114,7 +168,7 @@ namespace VkUtils
     {
         if (result != VK_SUCCESS)
         {
-            printf("VkResult is '%s' in %s:%i", VkUtils::VKResultToString(result), fileName, lineNumber);
+            printf("VkResult is '%s' in %s:%i", Utils::VKResultToString(result), fileName, lineNumber);
 
             if (result == VK_ERROR_DEVICE_LOST)
             {
@@ -135,8 +189,15 @@ namespace VkUtils
     }
 
     void CreateBuffer(VkDevice device, VkPhysicalDevice physicalDevice, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
-    void CreateImage(VkDevice device, VkPhysicalDevice physicalDevice, uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
+    void CreateImage2D(VkDevice device, VkPhysicalDevice physicalDevice, uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
+
+    VkImageView CreateImageView2D(VkDevice device, VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels);
 
     VkResult CreateShaderModule(VkDevice device, const std::vector<char>& code, VkShaderModule& vkShaderModule);
+
+    VkCommandBuffer BeginSingleTimeCommands(VulkanRenderDevice& vkDev);
+    void EndSingleTimeCommands(VulkanRenderDevice& vkDev, VkCommandBuffer commandBuffer);
+
 }
 
+vkEND_NAMESPACE

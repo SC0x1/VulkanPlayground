@@ -1,6 +1,6 @@
 #include "VKPlayground_PCH.h"
 
-#include "vulkan/vkutils.h"
+#include "vulkan/utils.h"
 #include "example_app.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
@@ -42,9 +42,9 @@ VulkanExample::~VulkanExample()
 
 }
 
-void VulkanExample::InitializeVulkan()
+void VulkanExample::OnInitialize()
 {
-    VulkanBaseApp::InitializeVulkan();
+    VulkanBaseApp::OnInitialize();
 
     CreateTextureImage();
     CreateTextureImageView();
@@ -65,9 +65,11 @@ void VulkanExample::InitializeVulkan()
     CreateDescriptorSets();
 
     CreateCommandBuffers();
+
+    m_ImGuiLayer.Initialize(this);
 }
 
-void VulkanExample::Cleanup()
+void VulkanExample::OnCleanup()
 {
     vkDestroySampler(m_Device, m_TextureSampler, nullptr);
     vkDestroyImageView(m_Device, m_TextureImageView, nullptr);
@@ -75,7 +77,7 @@ void VulkanExample::Cleanup()
     vkDestroyImage(m_Device, m_TextureImage, nullptr);
     vkFreeMemory(m_Device, m_TextureImageMemory, nullptr);
 
-    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+    for (size_t i = 0; i < m_MaxFramesInFlight; i++)
     {
         vkDestroyBuffer(m_Device, m_UniformBuffers[i], nullptr);
         vkFreeMemory(m_Device, m_UniformBuffersMemory[i], nullptr);
@@ -93,13 +95,21 @@ void VulkanExample::Cleanup()
     vkDestroyBuffer(m_Device, m_VertexBuffer, nullptr);
     vkFreeMemory(m_Device, m_VertexBufferMemory, nullptr);
 
-    VulkanBaseApp::Cleanup();
+    m_ImGuiLayer.Shutdown();
+
+    VulkanBaseApp::OnCleanup();
 }
 
-void VulkanExample::Render()
+void VulkanExample::OnRender()
 {
+    //m_ImGuiLayer.StartFrame();
     DrawFrame();
-    // DrawImGui
+}
+
+void VulkanExample::OnRecreateSwapchain()
+{
+    VulkanBaseApp::OnRecreateSwapchain();
+    m_ImGuiLayer.OnRecreateSwapchain();
 }
 
 void VulkanExample::CreateDescriptorSetLayout()
@@ -131,12 +141,10 @@ void VulkanExample::CreateDescriptorSetLayout()
     layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());;
     layoutInfo.pBindings = bindings.data();
 
-    if (vkCreateDescriptorSetLayout(m_Device, &layoutInfo, nullptr, &m_DescriptorSetLayout) != VK_SUCCESS)
-    {
-        throw std::runtime_error("failed to create descriptor set layout!");
-    }
+    VK_CHECK(vkCreateDescriptorSetLayout(m_Device, &layoutInfo, nullptr, &m_DescriptorSetLayout));
 }
 
+//BOOKMARK: CreateGraphicsPipeline
 void VulkanExample::CreateGraphicsPipeline()
 {
     std::vector<char> vertShaderCode;
@@ -148,9 +156,9 @@ void VulkanExample::CreateGraphicsPipeline()
     ReadFile(pathFrag.c_str(), fragShaderCode);
 
     VkShaderModule vertShaderModule;
-    VK_CHECK(VkUtils::CreateShaderModule(m_Device, vertShaderCode, vertShaderModule));
+    VK_CHECK(Vk::Utils::CreateShaderModule(m_Device, vertShaderCode, vertShaderModule));
     VkShaderModule fragShaderModule;
-    VK_CHECK(VkUtils::CreateShaderModule(m_Device, fragShaderCode, fragShaderModule));
+    VK_CHECK(Vk::Utils::CreateShaderModule(m_Device, fragShaderCode, fragShaderModule));
 
     VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
     vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -185,17 +193,18 @@ void VulkanExample::CreateGraphicsPipeline()
     inputAssembly.primitiveRestartEnable = VK_FALSE;
     //////////////////////////////////////////////////////////////////////////
     // Viewports and scissors
+    const VkExtent2D swapchainExtend = m_Swapchain.GetExtent();
     VkViewport viewport{};
     viewport.x = 0.0f;
     viewport.y = 0.0f;
-    viewport.width = (float)m_SwapChainExtent.width;
-    viewport.height = (float)m_SwapChainExtent.height;
+    viewport.width = (float)swapchainExtend.width;
+    viewport.height = (float)swapchainExtend.height;
     viewport.minDepth = 0.0f;
     viewport.maxDepth = 1.0f;
 
     VkRect2D scissor{};
     scissor.offset = { 0, 0 };
-    scissor.extent = m_SwapChainExtent;
+    scissor.extent = swapchainExtend;
 
     std::vector<VkDynamicState> dynamicStates =
     {
@@ -270,17 +279,16 @@ void VulkanExample::CreateGraphicsPipeline()
         depthStencil.depthTestEnable = VK_TRUE;  // field specifies if the depth of new fragments should be compared to the depth buffer to see if they should be discarded
         depthStencil.depthWriteEnable = VK_TRUE; // field specifies if the new depth of fragments that pass the depth test should actually be written to the depth buffer
         depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
-        /*
-        depthCompareOp field specifies the comparison that is performed to keep or discard fragments.
-        We're sticking to the convention of lower depth = closer, so the depth of new fragments should be less.
-        */
+        // depthCompareOp field specifies the comparison that is performed to keep 
+        // or discard fragments. We're sticking to the convention of lower depth = closer,
+        // so the depth of new fragments should be less.
         depthStencil.depthBoundsTestEnable = VK_FALSE;
         depthStencil.minDepthBounds = 0.0f; // Optional
         depthStencil.maxDepthBounds = 1.0f; // Optional
-        /*
-        The depthBoundsTestEnable, minDepthBounds and maxDepthBounds fields are used for the optional depth bound test.
-        Basically, this allows you to only keep fragments that fall within the specified depth range.
-        */
+        // The depthBoundsTestEnable, minDepthBounds and maxDepthBounds fields
+        // are used for the optional depth bound test.
+        // Basically, this allows you to only keep fragments that fall within the
+        // specified depth range.
         depthStencil.stencilTestEnable = VK_FALSE;
         depthStencil.front = {}; // Optional
         depthStencil.back = {}; // Optional
@@ -334,14 +342,16 @@ void VulkanExample::CreateGraphicsPipeline()
     colorBlending.blendConstants[1] = 0.0f; // Optional
     colorBlending.blendConstants[2] = 0.0f; // Optional
     colorBlending.blendConstants[3] = 0.0f; // Optional
-    /*
-        If you want to use the second method of blending (bitwise combination),
-        then you should set logicOpEnable to VK_TRUE. The bitwise operation can then be specified in the logicOp field.
-        Note that this will automatically disable the first method, as if you had set blendEnable to VK_FALSE for every
-        attached framebuffer! The colorWriteMask will also be used in this mode to determine which channels in the
-        framebuffer will actually be affected. It is also possible to disable both modes, as we've done here,
-        in which case the fragment colors will be written to the framebuffer unmodified.
-    */
+
+    // If you want to use the second method of blending (bitwise combination),
+    // then you should set logicOpEnable to VK_TRUE.
+    // The bitwise operation can then be specified in the logicOp field.
+    // Note that this will automatically disable the first method, as if you had set
+    // blendEnable to VK_FALSE for every attached framebuffer! The colorWriteMask will
+    // also be used in this mode to determine which channels in the framebuffer will
+    // actually be affected. It is also possible to disable both modes, as we've done here,
+    // in which case the fragment colors will be written to the framebuffer unmodified.
+
     //////////////////////////////////////////////////////////////////////////
     // Pipeline layout
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
@@ -350,14 +360,12 @@ void VulkanExample::CreateGraphicsPipeline()
     pipelineLayoutInfo.pSetLayouts = &m_DescriptorSetLayout; // Optional
     pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
     pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
-    /*
-        You can use uniform values in shaders, which are globals similar to dynamic state variables that can be
-        changed at drawing time to alter the behavior of your shaders without having to recreate them
-    */
-    if (vkCreatePipelineLayout(m_Device, &pipelineLayoutInfo, nullptr, &m_PipelineLayout) != VK_SUCCESS)
-    {
-        throw std::runtime_error("failed to create pipeline layout!");
-    }
+
+    // You can use uniform values in shaders, which are globals similar to dynamic
+    // state variables that can be changed at drawing time to alter the behavior
+    // of your shaders without having to recreate them.
+
+    VK_CHECK(vkCreatePipelineLayout(m_Device, &pipelineLayoutInfo, nullptr, &m_PipelineLayout));
 
     VkGraphicsPipelineCreateInfo pipelineInfo{};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -381,20 +389,16 @@ void VulkanExample::CreateGraphicsPipeline()
 
     pipelineInfo.basePipelineHandle = VK_NULL_HANDLE; // Optional
     pipelineInfo.basePipelineIndex = -1; // Optional
-    /*
-    There are actually two more parameters: basePipelineHandle and basePipelineIndex.
-    Vulkan allows you to create a new graphics pipeline by deriving from an existing pipeline.
-    The idea of pipeline derivatives is that it is less expensive to set up pipelines when
-    they have much functionality in common with an existing pipeline and switching between
-    pipelines from the same parent can also be done quicker. You can either specify the handle
-    of an existing pipeline with basePipelineHandle or reference another pipeline that is about
-    to be created by index with basePipelineIndex.
-    */
 
-    if (vkCreateGraphicsPipelines(m_Device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_GraphicsPipeline) != VK_SUCCESS)
-    {
-        throw std::runtime_error("failed to create graphics pipeline!");
-    }
+    // There are actually two more parameters: basePipelineHandle and basePipelineIndex.
+    // Vulkan allows you to create a new graphics pipeline by deriving from an existing pipeline.
+    // The idea of pipeline derivatives is that it is less expensive to set up pipelines when
+    // they have much functionality in common with an existing pipeline and switching between
+    // pipelines from the same parent can also be done quicker.
+    // You can either specify the handle of an existing pipeline with basePipelineHandle
+    // or reference another pipeline that is about to be created by index with basePipelineIndex.
+
+    VK_CHECK(vkCreateGraphicsPipelines(m_Device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_GraphicsPipeline));
 
     vkDestroyShaderModule(m_Device, fragShaderModule, nullptr);
     vkDestroyShaderModule(m_Device, vertShaderModule, nullptr);
@@ -414,16 +418,16 @@ void VulkanExample::CreateTextureImage()
     }
 
     m_MipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(texWidth, texHeight)))) + 1;
-    /*
-     The max function selects the largest dimension. The log2 function calculates how many times that dimension can be divided by 2.
-     The floor function handles cases where the largest dimension is not a power of 2.
-     1 is added so that the original image has a mip level.
-    */
+
+    // The max function selects the largest dimension.
+    // The log2 function calculates how many times that dimension can be divided by 2.
+    // The floor function handles cases where the largest dimension is not a power of 2.
+    // 1 is added so that the original image has a mip level.
 
     VkBuffer stagingBuffer;
     VkDeviceMemory stagingBufferMemory;
 
-    VkUtils::CreateBuffer(m_Device, m_PhysicalDevice, imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+    Vk::Utils::CreateBuffer(m_Device, m_PhysicalDevice, imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
 
     void* data;
@@ -433,15 +437,15 @@ void VulkanExample::CreateTextureImage()
 
     stbi_image_free(pixels);
 
-    VkUtils::CreateImage(m_Device, m_PhysicalDevice, texWidth, texHeight, m_MipLevels, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R8G8B8A8_SRGB,
+    Vk::Utils::CreateImage2D(m_Device, m_PhysicalDevice, texWidth, texHeight, m_MipLevels, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R8G8B8A8_SRGB,
         VK_IMAGE_TILING_OPTIMAL,
         VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_TextureImage, m_TextureImageMemory);
 
-    /*
-    The next step is to copy the staging buffer to the texture image. This involves two steps:
-        Transition the texture image to VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
-        Execute the buffer to image copy operation
-    */
+    // The next step is to copy the staging buffer to the texture image.
+    // This involves two steps:
+    //   Transition the texture image to VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+    //   Execute the buffer to image copy operation
+
     TransitionImageLayout(m_TextureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, m_MipLevels);
     CopyBufferToImage(stagingBuffer, m_TextureImage, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
     //transitioned to VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL while generating mipmaps
@@ -466,45 +470,49 @@ void VulkanExample::CreateTextureSampler()
     samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
     samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
     samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    /*
-    VK_SAMPLER_ADDRESS_MODE_REPEAT: Repeat the texture when going beyond the image dimensions.
-    VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT: Like repeat, but inverts the coordinates to mirror the image when going beyond the dimensions.
-    VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE: Take the color of the edge closest to the coordinate beyond the image dimensions.
-    VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE: Like clamp to edge, but instead uses the edge opposite to the closest edge.
-    VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER: Return a solid color when sampling beyond the dimensions of the image.
-    */
+
+    // *VK_SAMPLER_ADDRESS_MODE_REPEAT*
+    // Repeat the texture when going beyond the image dimensions.
+    // *VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT*
+    // Like repeat, but inverts the coordinates to mirror the image when going beyond the dimensions.
+    // *VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE*
+    // Take the color of the edge closest to the coordinate beyond the image dimensions.
+    // *VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE*
+    // Like clamp to edge, but instead uses the edge opposite to the closest edge.
+    // *VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER*
+    // Return a solid color when sampling beyond the dimensions of the image.
 
     // Anisotropy
     VkPhysicalDeviceProperties properties{};
     vkGetPhysicalDeviceProperties(m_PhysicalDevice, &properties);
 
     samplerInfo.anisotropyEnable = VK_TRUE;
-    /*
-    samplerInfo.anisotropyEnable = VK_FALSE; // in case if we don't want to request it at startup
-    samplerInfo.maxAnisotropy = 1.0f;
-    */
+    //samplerInfo.anisotropyEnable = VK_FALSE; // in case if we don't want to request it at startup
+    //samplerInfo.maxAnisotropy = 1.0f;
     samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
     samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-    /*
-    The borderColor field specifies which color is returned when sampling beyond the image with clamp to border addressing mode.
-    It is possible to return black, white or transparent in either float or int formats. You cannot specify an arbitrary color.
-    */
+
+    // The borderColor field specifies which color is returned when sampling beyond
+    // the image with clamp to border addressing mode.
+    // It is possible to return black, white or transparent in either float or
+    // int formats. You cannot specify an arbitrary color.
 
     samplerInfo.unnormalizedCoordinates = VK_FALSE;
-    /*
-    The unnormalizedCoordinates field specifies which coordinate system you want to use to address texels in an image.
-    If this field is VK_TRUE, then you can simply use coordinates within the [0, texWidth) and [0, texHeight) range.
-    If it is VK_FALSE, then the texels are addressed using the [0, 1) range on all axes. Real-world applications almost always use normalized coordinates,
-    because then it's possible to use textures of varying resolutions with the exact same coordinates.
-    */
+
+    // The unnormalizedCoordinates field specifies which coordinate system you want
+    // to use to address texels in an image.
+    // If this field is VK_TRUE, then you can simply use coordinates within the
+    // [0, texWidth) and [0, texHeight) range. If it is VK_FALSE, then the texels
+    // are addressed using the [0, 1) range on all axes. Real-world applications
+    // almost always use normalized coordinates, because then it's possible to use
+    // textures of varying resolutions with the exact same coordinates.
 
     samplerInfo.compareEnable = VK_FALSE;
     samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
-    /*
-    If a comparison function is enabled, then texels will first be compared to a value,
-    and the result of that comparison is used in filtering operations.
-    This is mainly used for percentage-closer filtering on shadow maps.
-    */
+
+    // If a comparison function is enabled, then texels will first be compared to a value,
+    // and the result of that comparison is used in filtering operations.
+    // This is mainly used for percentage-closer filtering on shadow maps.
 
     // Mipmapping
     samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
@@ -512,16 +520,13 @@ void VulkanExample::CreateTextureSampler()
     samplerInfo.maxLod = static_cast<float>(m_MipLevels);
     samplerInfo.mipLodBias = 0.0f; // Optional
 
-    if (vkCreateSampler(m_Device, &samplerInfo, nullptr, &m_TextureSampler) != VK_SUCCESS)
-    {
-        throw std::runtime_error("failed to create texture sampler!");
-    }
+    VK_CHECK(vkCreateSampler(m_Device, &samplerInfo, nullptr, &m_TextureSampler));
 
-    /*
-    the sampler does not reference a VkImage anywhere. The sampler is a distinct object that provides an interface to extract colors from a texture.
-    It can be applied to any image you want, whether it is 1D, 2D or 3D.
-    This is different from many older APIs, which combined texture images and filtering into a single state.
-    */
+    // The sampler does not reference a VkImage anywhere.
+    // The sampler is a distinct object that provides an interface to extract colors from a texture.
+    // It can be applied to any image you want, whether it is 1D, 2D or 3D.
+    // This is different from many older APIs, which combined texture images and
+    // filtering into a single state.
 }
 
 void VulkanExample::CreateVertexBuffer()
@@ -531,30 +536,29 @@ void VulkanExample::CreateVertexBuffer()
     VkBuffer stagingBuffer;
     VkDeviceMemory stagingBufferMemory;
     
-    VkUtils::CreateBuffer(m_Device, m_PhysicalDevice, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+    Vk::Utils::CreateBuffer(m_Device, m_PhysicalDevice, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
 
     void* data;
     vkMapMemory(m_Device, stagingBufferMemory, 0, bufferSize, 0, &data);
     memcpy(data, m_Vertices.data(), (size_t)bufferSize);
     vkUnmapMemory(m_Device, stagingBufferMemory);
 
-    VkUtils::CreateBuffer(m_Device, m_PhysicalDevice, bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_VertexBuffer, m_VertexBufferMemory);
+    Vk::Utils::CreateBuffer(m_Device, m_PhysicalDevice, bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_VertexBuffer, m_VertexBufferMemory);
 
     CopyBuffer(stagingBuffer, m_VertexBuffer, bufferSize);
 
     vkDestroyBuffer(m_Device, stagingBuffer, nullptr);
     vkFreeMemory(m_Device, stagingBufferMemory, nullptr);
-    /*
-    the driver may not immediately copy the data into the buffer memory, for example because of caching.
-    It is also possible that writes to the buffer are not visible in the mapped memory yet.
-    There are two ways to deal with that problem:
-
-    Use a memory heap that is host coherent, indicated with VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
-    Call vkFlushMappedMemoryRanges after writing to the mapped memory, and call vkInvalidateMappedMemoryRanges
-    before reading from the mapped memory
-
-    The transfer of memory to GPU is guaranteed to be complete as of the next call to vkQueueSubmit
-    */
+    // The driver may not immediately copy the data into the buffer memory,
+    // for example because of caching. It is also possible that writes to the buffer
+    // are not visible in the mapped memory yet.
+    // There are two ways to deal with that problem:
+    // * Use a memory heap that is host coherent, indicated with
+    // VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+    // * Call vkFlushMappedMemoryRanges after writing to the mapped memory,
+    // and call vkInvalidateMappedMemoryRanges before reading from the mapped memory.
+    // The transfer of memory to GPU is guaranteed to be complete
+    // as of the next call to vkQueueSubmit.
 }
 
 void VulkanExample::CreateIndexBuffer()
@@ -563,14 +567,14 @@ void VulkanExample::CreateIndexBuffer()
 
     VkBuffer stagingBuffer;
     VkDeviceMemory stagingBufferMemory;
-    VkUtils::CreateBuffer(m_Device, m_PhysicalDevice, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+    Vk::Utils::CreateBuffer(m_Device, m_PhysicalDevice, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
 
     void* data;
     vkMapMemory(m_Device, stagingBufferMemory, 0, bufferSize, 0, &data);
     memcpy(data, m_Indices.data(), (size_t)bufferSize);
     vkUnmapMemory(m_Device, stagingBufferMemory);
 
-    VkUtils::CreateBuffer(m_Device, m_PhysicalDevice, bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_IndexBuffer, m_IndexBufferMemory);
+    Vk::Utils::CreateBuffer(m_Device, m_PhysicalDevice, bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_IndexBuffer, m_IndexBufferMemory);
 
     CopyBuffer(stagingBuffer, m_IndexBuffer, bufferSize);
 
@@ -582,13 +586,13 @@ void VulkanExample::CreateUniformBuffers()
 {
     VkDeviceSize bufferSize = sizeof(UniformBufferObject);
 
-    m_UniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
-    m_UniformBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT);
-    m_UniformBuffersMapped.resize(MAX_FRAMES_IN_FLIGHT);
+    m_UniformBuffers.resize(m_MaxFramesInFlight);
+    m_UniformBuffersMemory.resize(m_MaxFramesInFlight);
+    m_UniformBuffersMapped.resize(m_MaxFramesInFlight);
 
-    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+    for (size_t i = 0; i < m_MaxFramesInFlight; i++)
     {
-        VkUtils::CreateBuffer(m_Device, m_PhysicalDevice, bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+        Vk::Utils::CreateBuffer(m_Device, m_PhysicalDevice, bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
             m_UniformBuffers[i], m_UniformBuffersMemory[i]);
 
@@ -600,48 +604,47 @@ void VulkanExample::CreateDescriptorPool()
 {
     std::array<VkDescriptorPoolSize, 2> poolSizes{};
     poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER; // UBO
-    poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+    poolSizes[0].descriptorCount = static_cast<uint32_t>(m_MaxFramesInFlight);
     poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER; // Sampler
-    poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+    poolSizes[1].descriptorCount = static_cast<uint32_t>(m_MaxFramesInFlight);
 
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
     poolInfo.pPoolSizes = poolSizes.data();
-    poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
-    /*
-    Inadequate descriptor pools are a good example of a problem that the validation layers will not catch:
-    As of Vulkan 1.1, vkAllocateDescriptorSets may fail with the error code VK_ERROR_POOL_OUT_OF_MEMORY
-    if the pool is not sufficiently large, but the driver may also try to solve the problem internally.
-    This means that sometimes (depending on hardware, pool size and allocation size) the driver will let us
-    get away with an allocation that exceeds the limits of our descriptor pool.
-    Other times, vkAllocateDescriptorSets will fail and return VK_ERROR_POOL_OUT_OF_MEMORY.
-    This can be particularly frustrating if the allocation succeeds on some machines, but fails on others.
-    */
+    poolInfo.maxSets = static_cast<uint32_t>(m_MaxFramesInFlight);
 
-    if (vkCreateDescriptorPool(m_Device, &poolInfo, nullptr, &m_DescriptorPool) != VK_SUCCESS)
-    {
-        throw std::runtime_error("failed to create descriptor pool!");
-    }
+    // Inadequate descriptor pools are a good example of a problem that the
+    // validation layers will not catch:
+    // As of Vulkan 1.1, vkAllocateDescriptorSets may fail with the error code
+    // VK_ERROR_POOL_OUT_OF_MEMORY if the pool is not sufficiently large, but the
+    // driver may also try to solve the problem internally. This means that sometimes
+    // (depending on hardware, pool size and allocation size) the driver will let us
+    // get away with an allocation that exceeds the limits of our descriptor pool.
+    // Other times, vkAllocateDescriptorSets will fail and return VK_ERROR_POOL_OUT_OF_MEMORY.
+    // This can be particularly frustrating if the allocation succeeds on some machines,
+    // but fails on others.
+
+    VK_CHECK(vkCreateDescriptorPool(m_Device, &poolInfo, nullptr, &m_DescriptorPool));
 }
 
 void VulkanExample::CreateDescriptorSets()
 {
-    std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, m_DescriptorSetLayout);
+    std::vector<VkDescriptorSetLayout> layouts(m_MaxFramesInFlight, m_DescriptorSetLayout);
     VkDescriptorSetAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
     allocInfo.descriptorPool = m_DescriptorPool;
-    allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+    allocInfo.descriptorSetCount = static_cast<uint32_t>(m_MaxFramesInFlight);
     allocInfo.pSetLayouts = layouts.data();
 
-    m_DescriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
+    m_DescriptorSets.resize(m_MaxFramesInFlight);
 
     if (vkAllocateDescriptorSets(m_Device, &allocInfo, m_DescriptorSets.data()) != VK_SUCCESS)
     {
         throw std::runtime_error("failed to allocate descriptor sets!");
     }
 
-    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+    for (size_t i = 0; i < m_MaxFramesInFlight; i++)
     {
         // UBO
         VkDescriptorBufferInfo bufferInfo{};
@@ -664,11 +667,11 @@ void VulkanExample::CreateDescriptorSets()
         descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         descriptorWrites[0].descriptorCount = 1;
         descriptorWrites[0].pBufferInfo = &bufferInfo;
-        /*
-        We need to specify the type of descriptor again.
-        It's possible to update multiple descriptors at once in an array, starting at index dstArrayElement.
-        The descriptorCount field specifies how many array elements you want to update.
-        */
+
+        // We need to specify the type of descriptor again.
+        // It's possible to update multiple descriptors at once in an array,
+        // starting at index dstArrayElement. The descriptorCount field specifies
+        // how many array elements you want to update.
 
         descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         descriptorWrites[1].dstSet = m_DescriptorSets[i];
@@ -679,21 +682,18 @@ void VulkanExample::CreateDescriptorSets()
         descriptorWrites[1].pImageInfo = &imageInfo;
         descriptorWrites[1].pTexelBufferView = nullptr; // Optional
 
-        /*
-        The pBufferInfo field is used for descriptors that refer to buffer data, pImageInfo is used for descriptors
-        that refer to image data, and pTexelBufferView is used for descriptors that refer to buffer views.
-        */
+        // The pBufferInfo field is used for descriptors that refer to buffer data,
+        // pImageInfo is used for descriptors that refer to image data,
+        // and pTexelBufferView is used for descriptors that refer to buffer views.
 
         vkUpdateDescriptorSets(m_Device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
     }
-    /*
-    The descriptors are now ready to be used by the shaders!
-    */
+    // The descriptors are now ready to be used by the shaders!
 }
 
 void VulkanExample::CreateCommandBuffers()
 {
-    m_CommandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+    m_CommandBuffers.resize(m_MaxFramesInFlight);
 
     VkCommandBufferAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -701,36 +701,38 @@ void VulkanExample::CreateCommandBuffers()
     allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     allocInfo.commandBufferCount = (uint32_t)m_CommandBuffers.size();
 
-    if (vkAllocateCommandBuffers(m_Device, &allocInfo, m_CommandBuffers.data()) != VK_SUCCESS)
-    {
-        throw std::runtime_error("failed to allocate command buffers!");
-    }
-    /*
-    The level parameter specifies if the allocated command buffers are primary or secondary command buffers.
-        VK_COMMAND_BUFFER_LEVEL_PRIMARY: Can be submitted to a queue for execution, but cannot be called from other command buffers.
-        VK_COMMAND_BUFFER_LEVEL_SECONDARY: Cannot be submitted directly, but can be called from primary command buffers.
-        (it's helpful to reuse common operations from primary command buffers.)
-    */
+    VK_CHECK(vkAllocateCommandBuffers(m_Device, &allocInfo, m_CommandBuffers.data()));
+    // The level parameter specifies if the allocated command buffers are primary
+    //  or secondary command buffers.
+    // *VK_COMMAND_BUFFER_LEVEL_PRIMARY*
+    //  Can be submitted to a queue for execution, but cannot be called from other command buffers.
+    // *VK_COMMAND_BUFFER_LEVEL_SECONDARY*
+    //  Cannot be submitted directly, but can be called from primary command buffers.
+    //  (it's helpful to reuse common operations from primary command buffers.)
 }
 
-void VulkanExample::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) const
+// BOOKMARK:2 RecordCommandBuffer - VulkanExample
+void VulkanExample::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex)
 {
+    vkResetCommandBuffer(commandBuffer, 0);
+
     VkCommandBufferBeginInfo beginInfo{};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     beginInfo.flags = 0; // Optional
     beginInfo.pInheritanceInfo = nullptr; // Optional
-    /*
-    The flags parameter specifies how we're going to use the command buffer. The following values are available:
-        VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT: The command buffer will be rerecorded right after executing it once.
-        VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT: This is a secondary command buffer that will be entirely within a single render pass.
-        VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT: The command buffer can be resubmitted while it is also already pending execution.
-    The pInheritanceInfo parameter is only relevant for secondary command buffers.
-    It specifies which state to inherit from the calling primary command buffers
-    */
-    if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS)
-    {
-        throw std::runtime_error("failed to begin recording command buffer!");
-    }
+    // The flags parameter specifies how we're going to use the command buffer.
+    // The following values are available:
+    // *VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT*
+    //   The command buffer will be rerecorded right after executing it once.
+    //  *VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT*
+    //   This is a secondary command buffer that will be entirely within a single render pass.
+    //  *VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT*
+    //   The command buffer can be resubmitted while it is also already pending execution.
+    // The pInheritanceInfo parameter is only relevant for secondary command buffers.
+    // It specifies which state to inherit from the calling primary command buffers
+    VK_CHECK(vkBeginCommandBuffer(commandBuffer, &beginInfo));
+
+    const VkExtent2D swapchainExtend = m_Swapchain.GetExtent();
 
     VkRenderPassBeginInfo renderPassInfo{};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -739,56 +741,56 @@ void VulkanExample::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t 
 
     // Define the size of the render area
     renderPassInfo.renderArea.offset = { 0, 0 };
-    renderPassInfo.renderArea.extent = m_SwapChainExtent;
+    renderPassInfo.renderArea.extent = swapchainExtend;
 
     std::array<VkClearValue, 2> clearValues{};
     clearValues[0].color = { {0.0f, 0.0f, 0.0f, 1.0f} };
     clearValues[1].depthStencil = { 1.0f, 0 };
-    /*
-    The range of depths in the depth buffer is 0.0 to 1.0 in Vulkan, where 1.0 lies at the far view plane and 0.0 at the near view plane.
-    The initial value at each point in the depth buffer should be the furthest possible depth, which is 1.0.
 
-    !!! Note that the order of clearValues should be identical to the order of your attachments.
-    */
-
+    // The range of depths in the depth buffer is 0.0 to 1.0 in Vulkan,
+    // where 1.0 lies at the far view plane and 0.0 at the near view plane.
+    // The initial value at each point in the depth buffer should be
+    // the furthest possible depth, which is 1.0.
+    //
+    // !!! Note that the order of clearValues should be identical to the order of your attachments.
+    
     renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
     renderPassInfo.pClearValues = clearValues.data();
 
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
     {
-        /*
-        The first parameter for every command is always the command buffer to record the command to.
-        The second parameter specifies the details of the render pass we've just provided.
-        The final parameter controls how the drawing commands within the render pass will be provided.
-        It can have one of two values:
-            VK_SUBPASS_CONTENTS_INLINE: The render pass commands will be embedded in the primary command buffer itself and no secondary command buffers will be executed.
-            VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS: The render pass commands will be executed from secondary command buffers.
-        All of the functions that record commands can be recognized by their vkCmd prefix.
-        */
+        // The first parameter for every command is always the command buffer to record the command to.
+        // The second parameter specifies the details of the render pass we've just provided.
+        // The final parameter controls how the drawing commands within the render pass will be provided.
+        // It can have one of two values:
+        // *VK_SUBPASS_CONTENTS_INLINE*
+        // The render pass commands will be embedded in the primary command buffer
+        // itself and no secondary command buffers will be executed.
+        // *VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS*
+        // The render pass commands will be executed from secondary command buffers.
+        // All of the functions that record commands can be recognized by their vkCmd prefix.
 
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_GraphicsPipeline);
-        /*
-        We've now told Vulkan which operations to execute in the graphics pipeline and
-        which attachment to use in the fragment shader.
-        */
+
+        // We've now told Vulkan which operations to execute in the graphics pipeline and
+        // which attachment to use in the fragment shader.
 
         VkViewport viewport{};
         viewport.x = 0.0f;
         viewport.y = 0.0f;
-        viewport.width = static_cast<float>(m_SwapChainExtent.width);
-        viewport.height = static_cast<float>(m_SwapChainExtent.height);
+        viewport.width = static_cast<float>(swapchainExtend.width);
+        viewport.height = static_cast<float>(swapchainExtend.height);
         viewport.minDepth = 0.0f;
         viewport.maxDepth = 1.0f;
         vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
 
         VkRect2D scissor{};
         scissor.offset = { 0, 0 };
-        scissor.extent = m_SwapChainExtent;
+        scissor.extent = swapchainExtend;
         vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
-        /*
-        We did specify viewport and scissor state for this pipeline to be dynamic.
-        So we need to set them in the command buffer before issuing our draw command.
-        */
+
+        // We did specify viewport and scissor state for this pipeline to be dynamic.
+        // So we need to set them in the command buffer before issuing our draw command.
 
         VkBuffer vertexBuffers[] = { m_VertexBuffer };
         VkDeviceSize offsets[] = { 0 };
@@ -796,34 +798,22 @@ void VulkanExample::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t 
 
         vkCmdBindIndexBuffer(commandBuffer, m_IndexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
-        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_PipelineLayout, 0, 1, &m_DescriptorSets[m_CurrentFrameIdx], 0, nullptr);
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_PipelineLayout, 0, 1, &m_DescriptorSets[imageIndex], 0, nullptr);
 
         //vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(m_Indices.dataindicesData.size()), 1, 0, 0, 0);
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(m_Indices.size()), 1, 0, 0, 0);
-
-        //vkCmdDraw(commandBuffer, static_cast<uint32_t>(vertices.size()), 1, 0, 0);
-
-        //vkCmdDraw(commandBuffer, 3, 1, 0, 0);
-
-        /*
-        It has the following parameters, aside from the command buffer:
-            vertexCount: Even though we don't have a vertex buffer, we technically still have 3 vertices to draw.
-            instanceCount: Used for instanced rendering, use 1 if you're not doing that.
-            firstVertex: Used as an offset into the vertex buffer, defines the lowest value of gl_VertexIndex.
-            firstInstance: Used as an offset for instanced rendering, defines the lowest value of gl_InstanceIndex.
-        */
     }
+
     vkCmdEndRenderPass(commandBuffer);
 
     // We've finished recording the command buffer
-    if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS)
-    {
-        throw std::runtime_error("failed to record command buffer!");
-    }
+    VK_CHECK(vkEndCommandBuffer(commandBuffer));
 }
 
 void VulkanExample::UpdateUniformBuffer(uint32_t currentImage)
 {
+    const VkExtent2D swapchainExtend = m_Swapchain.GetExtent();
+
     static auto startTime = std::chrono::high_resolution_clock::now();
 
     auto currentTime = std::chrono::high_resolution_clock::now();
@@ -834,42 +824,50 @@ void VulkanExample::UpdateUniformBuffer(uint32_t currentImage)
 
     ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 
-    ubo.proj = glm::perspective(glm::radians(45.0f), m_SwapChainExtent.width / (float)m_SwapChainExtent.height, 0.1f, 10.0f);
+    ubo.proj = glm::perspective(glm::radians(45.0f), swapchainExtend.width / (float)swapchainExtend.height, 0.1f, 10.0f);
 
     ubo.proj[1][1] *= -1;
-    /*
-    GLM was originally designed for OpenGL, where the Y coordinate of the clip coordinates is inverted.
-    The easiest way to compensate for that is to flip the sign on the scaling factor of the Y axis in the projection matrix.
-    If you don't do this, then the image will be rendered upside down.
-    */
+    // GLM was originally designed for OpenGL, where the Y coordinate of the clip
+    // coordinates is inverted.
+    // The easiest way to compensate for that is to flip the sign on the scaling
+    // factor of the Y axis in the projection matrix.
+    // If you don't do this, then the image will be rendered upside down.
 
     memcpy(m_UniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
 }
 
+// BOOKMARK: DrawFrame
 void VulkanExample::DrawFrame()
 {
-    VulkanBaseApp::PrepeareFrame();
+    auto syncObject = m_FramesInFlight.NextSyncObject();
+    std::optional<uint32_t> imageIndex = AcquireNextImage(syncObject);
+    if (imageIndex.has_value())
+    {
+        m_FrameBufferImageIndex = imageIndex.value();
+        const uint32_t currentFrameIdx = m_FramesInFlight.GetCurrentFrameIndex();
 
-    UpdateUniformBuffer(m_CurrentFrameIdx);
+        // Reset the in-flight fences so we do not get blocked waiting on in-flight images
+        //vkResetFences(m_Device, 1, &m_ImagesInFlight[currentFrameIdx]);
+        m_FramesInFlight.ResetFence(currentFrameIdx);
 
-    // After waiting, we need to manually reset the fence to the unsignaled state
-    vkResetFences(m_Device, 1, &m_InFlightFences[m_CurrentFrameIdx]);
+        UpdateUniformBuffer(m_FrameBufferImageIndex);
 
-    //////////////////////////////////////////////////////////////////////////
-    // Recording the command buffer
+        //////////////////////////////////////////////////////////////////////////
+        // Recording the command buffer
 
-    vkResetCommandBuffer(m_CommandBuffers[m_CurrentFrameIdx], 0);
-    /*
-    With the imageIndex specifying the swap chain image to use in hand, we can now record the command buffer.
-    First, we call vkResetCommandBuffer on the command buffer to make sure it is able to be recorded.
-    */
+        // With the imageIndex specifying the swap chain image to use in hand,
+        // we can now record the command buffer.
+        // First, we call vkResetCommandBuffer on the command buffer to make sure
+        // it is able to be recorded.
 
-    // Now call the function recordCommandBuffer to record the commands we want.
-    RecordCommandBuffer(m_CommandBuffers[m_CurrentFrameIdx], m_FrameBufferImageIndex);
+        // Now call the function recordCommandBuffer to record the commands we want.
+        RecordCommandBuffer(m_CommandBuffers[m_FrameBufferImageIndex], m_FrameBufferImageIndex);
 
-    VulkanBaseApp::SubmitFrame();
+        m_ImGuiLayer.OnRender(m_FrameBufferImageIndex);
+        // After waiting, we need to manually reset the fence to the unsignaled state
 
-    m_CurrentFrameIdx = (m_CurrentFrameIdx + 1) % MAX_FRAMES_IN_FLIGHT;
+        VulkanBaseApp::PresentFrame(syncObject, m_FrameBufferImageIndex, currentFrameIdx);
+    }
 }
 
 void VulkanExample::LoadModel()

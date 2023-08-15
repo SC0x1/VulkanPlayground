@@ -1,24 +1,24 @@
 #pragma once
 
-#include "vulkan/vkdevice.h"
+#include "vulkan/device.h"
 
-vkSTART_NAMESPACE
+vkBEGIN_NAMESPACE
 
-class VulkanContext
+class Context
 {
 public:
-    VulkanContext();
-    virtual ~VulkanContext();
+    Context();
+    virtual ~Context();
 
     void Init();
 
-    const VulkanDevice& GetDevice() const { m_Device; }
+    const Device& GetDevice() const { m_Device; }
 
     static VkInstance GetInstance() { return s_VulkanInstance; }
 
 private:
 
-    VulkanDevice m_Device;
+    Device m_Device;
 
     inline static VkInstance s_VulkanInstance;
 

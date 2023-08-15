@@ -1,10 +1,11 @@
 #include "VKPlayground_PCH.h"
 
-#include <vulkan/vkutils.h>
+#include "vulkan/utils.h"
 
-namespace VkUtils
+vkBEGIN_NAMESPACE
+
+namespace Utils
 {
-
     uint32_t FindQueueFamilies(VkPhysicalDevice device, VkQueueFlags desiredFlags)
     {
         // Assign index to queue families that could be found
@@ -92,14 +93,14 @@ namespace VkUtils
         VkMemoryAllocateInfo allocInfo{};
         allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
         allocInfo.allocationSize = memRequirements.size;
-        allocInfo.memoryTypeIndex = VkUtils::FindMemoryType(physicalDevice, memRequirements.memoryTypeBits, properties);
+        allocInfo.memoryTypeIndex = Utils::FindMemoryType(physicalDevice, memRequirements.memoryTypeBits, properties);
 
         VK_CHECK(vkAllocateMemory(device, &allocInfo, nullptr, &bufferMemory));
 
         vkBindBufferMemory(device, buffer, bufferMemory, 0);
     }
 
-    void CreateImage(VkDevice device, VkPhysicalDevice physicalDevice, uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory)
+    void CreateImage2D(VkDevice device, VkPhysicalDevice physicalDevice, uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory)
     {
         VkImageCreateInfo imageInfo{};
         imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -133,7 +134,7 @@ namespace VkUtils
         VkMemoryAllocateInfo allocInfo{};
         allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
         allocInfo.allocationSize = memRequirements.size;
-        allocInfo.memoryTypeIndex = VkUtils::FindMemoryType(physicalDevice, memRequirements.memoryTypeBits, properties);
+        allocInfo.memoryTypeIndex = Utils::FindMemoryType(physicalDevice, memRequirements.memoryTypeBits, properties);
 
         VK_CHECK(vkAllocateMemory(device, &allocInfo, nullptr, &imageMemory));
 
@@ -150,4 +151,85 @@ namespace VkUtils
         VK_CHECK_RET(vkCreateShaderModule(device, &createInfo, nullptr, &vkShaderModule));
     }
 
+    VkCommandBuffer BeginSingleTimeCommands(VulkanRenderDevice& vkDev)
+    {
+        VkCommandBuffer commandBuffer;
+
+        const VkCommandBufferAllocateInfo allocInfo = {
+            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+            .pNext = nullptr,
+            .commandPool = vkDev.commandPool,
+            .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+            .commandBufferCount = 1
+        };
+
+        vkAllocateCommandBuffers(vkDev.device, &allocInfo, &commandBuffer);
+
+        const VkCommandBufferBeginInfo beginInfo = {
+            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+            .pNext = nullptr,
+            .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+            .pInheritanceInfo = nullptr
+        };
+
+        vkBeginCommandBuffer(commandBuffer, &beginInfo);
+
+        return commandBuffer;
+    }
+
+    void EndSingleTimeCommands(VulkanRenderDevice& vkDev, VkCommandBuffer commandBuffer)
+    {
+        vkEndCommandBuffer(commandBuffer);
+
+        const VkSubmitInfo submitInfo = {
+            .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+            .pNext = nullptr,
+            .waitSemaphoreCount = 0,
+            .pWaitSemaphores = nullptr,
+            .pWaitDstStageMask = nullptr,
+            .commandBufferCount = 1,
+            .pCommandBuffers = &commandBuffer,
+            .signalSemaphoreCount = 0,
+            .pSignalSemaphores = nullptr
+        };
+
+        vkQueueSubmit(vkDev.graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+        vkQueueWaitIdle(vkDev.graphicsQueue);
+
+        vkFreeCommandBuffers(vkDev.device, vkDev.commandPool, 1, &commandBuffer);
+    }
+
+    VkImageView CreateImageView2D(VkDevice device, VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels)
+    {
+        VkImageViewCreateInfo imageViewCreateInfo{};
+        imageViewCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        imageViewCreateInfo.image = image;
+        // viewType parameter allows you to treat images as 1D textures, 2D textures, 3D textures and cube maps
+        imageViewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        imageViewCreateInfo.format = format;
+        // The components field allows you to swizzle the color channels around.
+        // For example, you can map all of the channels to the red channel for a
+        // monochrome texture.
+        // You can also map constant values of 0 and 1 to a channel
+        imageViewCreateInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+        imageViewCreateInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+        imageViewCreateInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+        imageViewCreateInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+        // subresourceRange field describes what the image's purpose is
+        // and which part of the image should be accessed.
+        // Our images will be used as color targets without any mipmapping levels
+        // or multiple layers
+        imageViewCreateInfo.subresourceRange.aspectMask = aspectFlags;
+        imageViewCreateInfo.subresourceRange.baseMipLevel = 0;
+        imageViewCreateInfo.subresourceRange.levelCount = mipLevels;
+        imageViewCreateInfo.subresourceRange.baseArrayLayer = 0;
+        imageViewCreateInfo.subresourceRange.layerCount = 1;
+
+        VkImageView imageView;
+        VK_CHECK(vkCreateImageView(device, &imageViewCreateInfo, nullptr, &imageView))
+
+        return imageView;
+    }
 }
+
+vkEND_NAMESPACE
