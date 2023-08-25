@@ -89,7 +89,7 @@ bool VulkanImGUI::Initialize(VulkanBaseApp* app)
     //init_info.UseDynamicRendering = true;
     init_info.CheckVkResultFn = Vk::Utils::CheckVkResult;
 
-    ImGui_ImplVulkan_Init(&init_info, m_App->GetRenderPass());
+    ImGui_ImplVulkan_Init(&init_info, m_RenderPass);
 
     // Load default font
     ImFontConfig fontConfig;
@@ -282,7 +282,7 @@ void VulkanImGUI::RecordCommandBuffer(VkCommandBuffer cmdBuffer, uint32_t imageI
 
     const VkExtent2D extend = m_App->GetSwapChainExtend();
 
-    VK_CHECK(vkResetCommandPool(device, m_CommandPool.GetVkCommandPool(), 0));
+    VK_CHECK(vkResetCommandBuffer(cmdBuffer, 0));
 
     VkCommandBufferBeginInfo commandBufferBeginInfo = {};
     commandBufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -439,6 +439,8 @@ void VulkanImGUI::CreateFramebuffers()
     VkImageView attachment[1];
     VkFramebufferCreateInfo info = {};
     info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    info.pNext = nullptr,
+    info.flags = 0,
     info.renderPass = m_RenderPass;
     info.attachmentCount = 1;
     info.pAttachments = attachment;

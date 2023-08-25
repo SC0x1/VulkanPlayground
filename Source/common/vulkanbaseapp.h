@@ -11,7 +11,7 @@
 class VulkanBaseApp 
 {
 public:
-    uint32_t m_MaxFramesInFlight = 2;
+    uint32_t m_MaxFramesInFlight = 0;
 
     // is measured in screen coordinates
     // But Vulkan works with pixels
