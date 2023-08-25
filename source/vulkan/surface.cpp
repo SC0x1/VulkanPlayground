@@ -81,6 +81,7 @@ void Surface::InitSurface(VkInstance instance, GLFWwindow* glfwWindow)
     err = glfwCreateWindowSurface(instance, glfwWindow, nullptr, &m_Surface);
 #endif
 
+    VK_CHECK(err);
     if (err != VK_SUCCESS)
     {
         throw std::runtime_error("failed to create window surface!");
@@ -89,7 +90,7 @@ void Surface::InitSurface(VkInstance instance, GLFWwindow* glfwWindow)
 
 void Surface::Destroy(VkInstance instance)
 {
-
+    vkDestroySurfaceKHR(instance, m_Surface, nullptr);
 }
 
 vkEND_NAMESPACE

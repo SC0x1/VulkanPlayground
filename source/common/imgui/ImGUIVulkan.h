@@ -15,7 +15,7 @@ public:
 
     void StartFrame();
 
-    void OnRender(uint32_t imageIndex, VkCommandBuffer cmdBuffer = VK_NULL_HANDLE);
+    void OnRender(uint32_t imageIndex);
 
     void OnRecreateSwapchain();
 

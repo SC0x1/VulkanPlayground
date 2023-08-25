@@ -145,8 +145,6 @@ void VulkanBaseApp::OnCleanup()
         // When the command pool is freed, the command buffers are also freed
         vkDestroyCommandPool(m_Device, m_CommandPool, nullptr);
 
-        m_Swapchain.Destroy();
-
         m_FramesInFlight.Destroy();
 
         vkDestroyDevice(m_Device, nullptr);
@@ -1004,9 +1002,11 @@ void VulkanBaseApp::GenerateMipmaps(VkImage image, VkFormat imageFormat, int32_t
     {
         throw std::runtime_error("texture image format does not support linear blitting!");
 
-        // There are two alternatives in this case. You could implement a function that searches common texture image formats
-        // for one that does support linear blitting, or you could implement the mipmap generation in software with a library like stb_image_resize.
-        // Each mip level can then be loaded into the image in the same way that you loaded the original image.
+        // There are two alternatives in this case. You could implement a function
+        // that searches common texture image formats for one that does support
+        // linear blitting, or you could implement the mipmap generation in software
+        // with a library like stb_image_resize. Each mip level can then be loaded
+        // into the image in the same way that you loaded the original image.
     }
 
     VkCommandBuffer commandBuffer = BeginSingleTimeCommands();
@@ -1041,8 +1041,8 @@ void VulkanBaseApp::GenerateMipmaps(VkImage image, VkFormat imageFormat, int32_t
             1, &barrier);
 
         // First, we transition level i - 1 to VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL.
-        // This transition will wait for level i - 1 to be filled, either from the previous blit command,
-        // or from vkCmdCopyBufferToImage.
+        // This transition will wait for level i - 1 to be filled, either from the
+        // previous blit command, or from vkCmdCopyBufferToImage.
 
         VkImageBlit blit{};
         blit.srcOffsets[0] = { 0, 0, 0 };
@@ -1060,10 +1060,13 @@ void VulkanBaseApp::GenerateMipmaps(VkImage image, VkFormat imageFormat, int32_t
 
         // Next, we specify the regions that will be used in the blit operation.
         // The source mip level is i - 1 and the destination mip level is i.
-        // The two elements of the srcOffsets array determine the 3D region that data will be blitted from.
+        // The two elements of the srcOffsets array determine the 3D region that
+        // data will be blitted from.
         // dstOffsets determines the region that data will be blitted to.
-        // The X and Y dimensions of the dstOffsets[1] are divided by two since each mip level is half the size of the previous level.
-        // The Z dimension of srcOffsets[1] and dstOffsets[1] must be 1, since a 2D image has a depth of 1.
+        // The X and Y dimensions of the dstOffsets[1] are divided by two since
+        // each mip level is half the size of the previous level.
+        // The Z dimension of srcOffsets[1] and dstOffsets[1] must be 1,
+        // since a 2D image has a depth of 1.
 
         vkCmdBlitImage(commandBuffer,
             image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,

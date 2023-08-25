@@ -16,8 +16,8 @@ public:
     // is measured in screen coordinates
     // But Vulkan works with pixels
     // glfwGetFramebufferSize to query the resolution of the window in pixel
-    const uint32_t WIDTH = 800;
-    const uint32_t HEIGHT = 600;
+    const uint32_t WIDTH = 1024;
+    const uint32_t HEIGHT = 768;
 
 public:
 

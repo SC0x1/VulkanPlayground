@@ -149,48 +149,8 @@ void VulkanImGUI::StartFrame()
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
-    //ImGuizmo::BeginFrame(); // TODO: ImGuizmo
-
-    //ImGuiViewport* viewport = ImGui::GetMainViewport();
-    //
-    //ImGui::SetNextWindowPos(viewport->WorkPos);
-    //ImGui::SetNextWindowSize(viewport->WorkSize);
-    //ImGui::SetNextWindowViewport(viewport->ID);
-    //auto dockWindowFlags = ImGuiWindowFlags_NoDocking
-    //    | ImGuiWindowFlags_NoCollapse
-    //    | ImGuiWindowFlags_NoResize
-    //    | ImGuiWindowFlags_NoMove
-    //    | ImGuiWindowFlags_NoBringToFrontOnFocus
-    //    | ImGuiWindowFlags_NoBackground
-    //    | ImGuiWindowFlags_NoTitleBar;
-    //ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
-    //ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0);
-    //ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-    //ImGui::Begin("Dock", nullptr, dockWindowFlags);
-    //ImGui::PopStyleVar(3);
-
-    //if (ImGui::DockBuilderGetNode(ImGui::GetID("MainDockspace")) == nullptr) {
-    //    ImGuiID dockspaceId = ImGui::GetID("MainDockspace");
-    //    ImGui::DockBuilderRemoveNode(dockspaceId);
-    //    ImGui::DockBuilderAddNode(dockspaceId);
-
-    //    ImGuiID mainDock = dockspaceId;
-    //    ImGuiID dockCenter = ImGui::DockBuilderSplitNode(mainDock, ImGuiDir_Up, 0.80f, nullptr, &mainDock);
-    //    ImGuiID dockRight = ImGui::DockBuilderSplitNode(mainDock, ImGuiDir_Right, 0.20f, nullptr, &mainDock);
-    //    ImGuiID dockBottom = ImGui::DockBuilderSplitNode(mainDock, ImGuiDir_Down, 0.20f, nullptr, &dockCenter);
-
-    //    ImGui::DockBuilderDockWindow("Center", dockCenter);
-    //    ImGui::DockBuilderDockWindow("Right", dockRight);
-    //    ImGui::DockBuilderDockWindow("Bottom", dockBottom);
-
-    //    ImGui::DockBuilderFinish(dockspaceId);
-    //}
-    //auto dockFlags = ImGuiDockNodeFlags_PassthruCentralNode
-    //    | ImGuiDockNodeFlags_NoWindowMenuButton
-    //    | ImGuiDockNodeFlags_NoCloseButton;
-
-    // OnImGuiFrameRender
     ImGui::ShowDemoWindow();
+    //ImGuizmo::BeginFrame(); // TODO: ImGuizmo
 
     // Render to generate draw buffers
     ImGui::Render();
@@ -198,8 +158,10 @@ void VulkanImGUI::StartFrame()
 
 void VulkanImGUI::OnRecreateSwapchain()
 {
-    const VkDevice device = m_App->GetVkDevice();
+    assert(m_App);
 
+    const VkDevice device = m_App->GetVkDevice();
+    const uint32_t imageCount = m_App->GetSwapChainImageCount();
     // Destroy Framebuffers
     for (auto framebuffer : m_Framebuffers)
     {
@@ -211,30 +173,20 @@ void VulkanImGUI::OnRecreateSwapchain()
 
     CreateRenderPass();
 
-    ImGui_ImplVulkan_SetMinImageCount(2); //TODO: Review
+    ImGui_ImplVulkan_SetMinImageCount(imageCount);
 
     CreateCommandPool();
     CreateCommandBuffers();
     CreateFramebuffers();
 }
 
-void VulkanImGUI::OnRender(uint32_t imageIndex, VkCommandBuffer cmdBuffer)
+void VulkanImGUI::OnRender(uint32_t imageIndex)
 {
     StartFrame();
 
     ImDrawData* main_draw_data = ImGui::GetDrawData();
 
-    if (cmdBuffer != VK_NULL_HANDLE)
-    {
-        //BOOKMARK: ImGui_ImplVulkan_RenderDrawData
-        // Grab and record the draw data for Dear Imgui
-        ImGui_ImplVulkan_RenderDrawData(main_draw_data, cmdBuffer);
-    }
-    else
-    {
-        RecordCommandBuffer(m_CommandBuffers[imageIndex], imageIndex, main_draw_data);
-        //RenderImGuiFrame(imageIndex, frameIdx, main_draw_data);
-    }
+    RecordCommandBuffer(m_CommandBuffers[imageIndex], imageIndex, main_draw_data);
 
     //if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
     //{
@@ -301,8 +253,7 @@ void VulkanImGUI::RecordCommandBuffer(VkCommandBuffer cmdBuffer, uint32_t imageI
     renderPassBeginInfo.pClearValues = &clearColor;
     vkCmdBeginRenderPass(cmdBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-    //BOOKMARK: ImGui_ImplVulkan_RenderDrawData
-    // Grab and record the draw data for Dear Imgui
+    // Grab and record the draw data for Dear ImGui
     ImGui_ImplVulkan_RenderDrawData(draw_data, cmdBuffer);
 
     vkCmdEndRenderPass(cmdBuffer);
@@ -353,7 +304,7 @@ void VulkanImGUI::CreateRenderPass()
     attachment.format = format;
     attachment.samples = VK_SAMPLE_COUNT_1_BIT;
     // Need UI to be drawn on top of main
-    attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD/*VK_ATTACHMENT_LOAD_OP_DONT_CARE*/;
+    attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
     attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
