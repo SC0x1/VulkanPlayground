@@ -179,7 +179,7 @@ void VulkanBaseApp::InitWindow()
     glfwSetFramebufferSizeCallback(m_Window, FramebufferResizeCallback);
 }
 
-void VulkanBaseApp::PresentFrame(Vk::SyncObject syncObject, uint32_t imageIndex, uint32_t frameIdx)
+void VulkanBaseApp::PresentFrame(Vk::SyncObject syncObject, uint32_t frameIdx, uint32_t imageIndex)
 {
     //////////////////////////////////////////////////////////////////////////
     // Submitting the command buffer
@@ -192,8 +192,8 @@ void VulkanBaseApp::PresentFrame(Vk::SyncObject syncObject, uint32_t imageIndex,
     VkSemaphore waitSemaphores[] = { syncObject.imageAvailableSemaphore };
     VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
 
-    VkCommandBuffer imGuiCommandBuffer = m_ImGuiLayer.GetCommandBuffer(imageIndex);
-    std::array<VkCommandBuffer, 2> cmdBuffers = { m_CommandBuffers[imageIndex], imGuiCommandBuffer };
+    VkCommandBuffer imGuiCommandBuffer = m_ImGuiLayer.GetCommandBuffer(frameIdx);
+    std::array<VkCommandBuffer, 2> cmdBuffers = { m_CommandBuffers[frameIdx], imGuiCommandBuffer };
 
     submitInfo.waitSemaphoreCount = 1;
     submitInfo.pWaitSemaphores = waitSemaphores;
@@ -216,34 +216,36 @@ void VulkanBaseApp::PresentFrame(Vk::SyncObject syncObject, uint32_t imageIndex,
 
     submitInfo.signalSemaphoreCount = 1;
     submitInfo.pSignalSemaphores = signalSemaphores;
-    // The signalSemaphoreCount and pSignalSemaphores parameters specify which semaphores to signal once the command buffer(s)
-    // have finished execution. In our case we're using the m_RenderFinishedSemaphore for that purpose.
+    // The signalSemaphoreCount and pSignalSemaphores parameters specify
+    // which semaphores to signal once the command buffer(s)
+    // have finished execution. In our case we're using
+    // the m_RenderFinishedSemaphore for that purpose.
 
     if (vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, syncObject.fence) != VK_SUCCESS)
     {
         throw std::runtime_error("failed to submit draw command buffer!");
     }
-    // The function takes an array of VkSubmitInfo structures as argument for efficiency
-    // when the workload is much larger.
-    // The last parameter references an optional fence that will be signaled when
-    // the command buffers finish execution.
-    // This allows us to know when it is safe for the command buffer to be reused,
-    // thus we want to give it inFlightFence.
+    // The function takes an array of VkSubmitInfo structures as argument for
+    // efficiency when the workload is much larger.
+    // The last parameter references an optional fence that will be signaled
+    // when the command buffers finish execution.
+    // This allows us to know when it is safe for the command buffer to be
+    // reused, thus we want to give it inFlightFence.
     // Now on the next frame, the CPU will wait for this command buffer to finish
     // executing before it records new commands into it.
 
     //////////////////////////////////////////////////////////////////////////
     // Subpass dependencies
     // 
-    // The subpasses in a render pass automatically take care of image layout transitions.
-    // These transitions are controlled by subpass dependencies,
+    // The subpasses in a render pass automatically take care of image layout
+    // transitions. These transitions are controlled by subpass dependencies,
     // which specify memory and execution dependencies between subpasses.
     // 
-    // There are two built-in dependencies that take care of the transition at the
-    // start of the render pass and at the end of the render pass,
+    // There are two built-in dependencies that take care of the transition
+    // at the start of the render pass and at the end of the render pass,
     // but the former does not occur at the right time.
-    // It assumes that the transition occurs at the start of the pipeline, but we
-    // haven't acquired the image yet at that point!
+    // It assumes that the transition occurs at the start of the pipeline,
+    // but we haven't acquired the image yet at that point!
     // 
     // There are two ways to deal with this problem.
     // We could change the waitStages for the imageAvailableSemaphore to
@@ -261,7 +263,6 @@ void VulkanBaseApp::PresentFrame(Vk::SyncObject syncObject, uint32_t imageIndex,
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || m_IsFramebufferResized)
     {
         m_IsFramebufferResized = false;
-        //RecreateSwapchain();
         OnRecreateSwapchain();
     }
     else if (result != VK_SUCCESS)
@@ -270,7 +271,6 @@ void VulkanBaseApp::PresentFrame(Vk::SyncObject syncObject, uint32_t imageIndex,
     }
 }
 
-// BOOKMARK: AcquireNextImage
 std::optional<uint32_t> VulkanBaseApp::AcquireNextImage(Vk::SyncObject syncObject)
 {
     vkWaitForFences(m_Device, 1, &syncObject.fence, VK_TRUE, UINT64_MAX);
@@ -297,14 +297,6 @@ std::optional<uint32_t> VulkanBaseApp::AcquireNextImage(Vk::SyncObject syncObjec
 
         throw std::runtime_error("failed to acquire swap chain image!");
     }
-
-    // Check if a previous frame is using this image (i.e. there is its fence to wait on)
- /*   if (m_ImagesInFlight[frameBufferImageIndex] != VK_NULL_HANDLE)
-    {
-        vkWaitForFences(m_Device, 1, &m_ImagesInFlight[frameBufferImageIndex], VK_TRUE, UINT64_MAX);
-    }
-
-    m_ImagesInFlight[frameBufferImageIndex] = syncObject.fence;*/
 
     return frameBufferImageIndex;
 }
@@ -490,7 +482,6 @@ void VulkanBaseApp::CreateLogicalDevice()
     vkGetDeviceQueue(m_Device, m_QueFamilyndices.presentFamily.value(), 0, &m_PresentQueue);
 }
 
-//BOOKMARK: RecreateSwapChain
 void VulkanBaseApp::OnRecreateSwapchain()
 {
     int width = 0, height = 0;
@@ -545,7 +536,6 @@ void VulkanBaseApp::CleanupSwapChain()
     m_Swapchain.Destroy();
 }
 
-//BOOKMARK:1 CreateRenderPass
 void VulkanBaseApp::CreateRenderPass()
 {
     const VkFormat colorFormat = m_Swapchain.GetSurfaceFormat().format;

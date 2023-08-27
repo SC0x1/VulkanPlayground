@@ -121,10 +121,8 @@ void VulkanExample::CreateDescriptorSetLayout()
     samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     samplerLayoutBinding.pImmutableSamplers = nullptr;
     samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-    /*
-    It is possible to use texture sampling in the vertex shader,
-    for example to dynamically deform a grid of vertices by a heightmap.
-    */
+    // It is possible to use texture sampling in the vertex shader,
+    // for example to dynamically deform a grid of vertices by a heightmap.
 
     // UBO 
     VkDescriptorSetLayoutBinding uboLayoutBinding{};
@@ -144,7 +142,6 @@ void VulkanExample::CreateDescriptorSetLayout()
     VK_CHECK(vkCreateDescriptorSetLayout(m_Device, &layoutInfo, nullptr, &m_DescriptorSetLayout));
 }
 
-//BOOKMARK: CreateGraphicsPipeline
 void VulkanExample::CreateGraphicsPipeline()
 {
     std::vector<char> vertShaderCode;
@@ -437,9 +434,14 @@ void VulkanExample::CreateTextureImage()
 
     stbi_image_free(pixels);
 
-    Vk::Utils::CreateImage2D(m_Device, m_PhysicalDevice, texWidth, texHeight, m_MipLevels, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R8G8B8A8_SRGB,
+    Vk::Utils::CreateImage2D(m_Device, m_PhysicalDevice, texWidth, texHeight,
+        m_MipLevels,
+        VK_SAMPLE_COUNT_1_BIT,
+        VK_FORMAT_R8G8B8A8_SRGB,
         VK_IMAGE_TILING_OPTIMAL,
-        VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_TextureImage, m_TextureImageMemory);
+        VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        m_TextureImage, m_TextureImageMemory);
 
     // The next step is to copy the staging buffer to the texture image.
     // This involves two steps:
@@ -810,7 +812,7 @@ void VulkanExample::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t 
     VK_CHECK(vkEndCommandBuffer(commandBuffer));
 }
 
-void VulkanExample::UpdateUniformBuffer(uint32_t currentImage)
+void VulkanExample::UpdateUniformBuffer(uint32_t frameIndex)
 {
     const VkExtent2D swapchainExtend = m_Swapchain.GetExtent();
 
@@ -833,24 +835,26 @@ void VulkanExample::UpdateUniformBuffer(uint32_t currentImage)
     // factor of the Y axis in the projection matrix.
     // If you don't do this, then the image will be rendered upside down.
 
-    memcpy(m_UniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
+    memcpy(m_UniformBuffersMapped[frameIndex], &ubo, sizeof(ubo));
 }
 
-// BOOKMARK: DrawFrame
 void VulkanExample::DrawFrame()
 {
     auto syncObject = m_FramesInFlight.NextSyncObject();
-    std::optional<uint32_t> imageIndex = AcquireNextImage(syncObject);
-    if (imageIndex.has_value())
+    const std::optional<uint32_t> imageIndexOpt = AcquireNextImage(syncObject);
+
+    const uint32_t frameIndex = m_FramesInFlight.GetCurrentFrameIndex();
+
+    // Reset the in-flight fences so we do not get blocked waiting on in-flight images
+    m_FramesInFlight.ResetFence(frameIndex);
+
+    m_ImGuiLayer.StartNewFrame();
+
+    UpdateUniformBuffer(frameIndex);
+
+    if (imageIndexOpt.has_value())
     {
-        m_FrameBufferImageIndex = imageIndex.value();
-        const uint32_t currentFrameIdx = m_FramesInFlight.GetCurrentFrameIndex();
-
-        // Reset the in-flight fences so we do not get blocked waiting on in-flight images
-        //vkResetFences(m_Device, 1, &m_ImagesInFlight[currentFrameIdx]);
-        m_FramesInFlight.ResetFence(currentFrameIdx);
-
-        UpdateUniformBuffer(m_FrameBufferImageIndex);
+        const uint32_t imageIndex = imageIndexOpt.value();
 
         //////////////////////////////////////////////////////////////////////////
         // Recording the command buffer
@@ -861,12 +865,11 @@ void VulkanExample::DrawFrame()
         // it is able to be recorded.
 
         // Now call the function recordCommandBuffer to record the commands we want.
-        RecordCommandBuffer(m_CommandBuffers[m_FrameBufferImageIndex], m_FrameBufferImageIndex);
+        RecordCommandBuffer(m_CommandBuffers[frameIndex], imageIndex);
 
-        m_ImGuiLayer.OnRender(m_FrameBufferImageIndex);
-        // After waiting, we need to manually reset the fence to the unsignaled state
+        m_ImGuiLayer.OnRender(frameIndex, imageIndex);
 
-        VulkanBaseApp::PresentFrame(syncObject, m_FrameBufferImageIndex, currentFrameIdx);
+        VulkanBaseApp::PresentFrame(syncObject, frameIndex, imageIndex);
     }
 }
 

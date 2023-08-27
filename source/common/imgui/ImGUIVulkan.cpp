@@ -39,11 +39,14 @@ bool VulkanImGUI::Initialize(VulkanBaseApp* app)
     //SRS - Set ImGui font and style scale factors to handle retina and other HiDPI displays
     ImGuiIO& io = ImGui::GetIO(); (void)io;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;       // Enable Keyboard Controls
-    //io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
-    //io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;           // Enable Docking
-    //io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;         // Enable Multi-Viewport / Platform Windows
-    //io.ConfigViewportsNoAutoMerge = true;
-    //io.ConfigViewportsNoTaskBarIcon = true;
+
+#if defined IMGUI_HAS_DOCK
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;           // Enable Docking
+#endif // IMGUI_HAS_DOCK
+
+#if defined IMGUI_HAS_VIEWPORT
+    io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;         // Enable Multi-Viewport / Platform Windows
+#endif // IMGUI_HAS_VIEWPORT
 
     io.FontGlobalScale = 1.0f;
     ImGuiStyle& style = ImGui::GetStyle();
@@ -51,10 +54,10 @@ bool VulkanImGUI::Initialize(VulkanBaseApp* app)
 
     ImGui::StyleColorsDark();
 
+    CreateDescriptorPool();
+
     CreateRenderPass();
     CreateFramebuffers();
-
-    CreateDescriptorPool();
 
     const VkInstance instance = m_App->GetVkInstance();
     const VkDevice device = m_App->GetVkDevice();
@@ -62,11 +65,6 @@ bool VulkanImGUI::Initialize(VulkanBaseApp* app)
     const VkQueue graphicsQueue = m_App->GetGraphicsQueue();
     const uint32_t queueFamily = m_App->GetQueueFamilyIndices().graphicsFamily.value();
     const uint32_t imageCount = m_App->GetSwapChainImageCount();
-    // Dynamic rendering
-    //const VkFormat colorFormat = m_App->GetSwapchainImageFormat();
-    
-    // Setup Platform/Renderer bindings
-    // BOOKMARK: ImGui
 
     //this initializes ImGui for GLFW
     ImGui_ImplGlfw_InitForVulkan((GLFWwindow*)window, true);
@@ -80,15 +78,12 @@ bool VulkanImGUI::Initialize(VulkanBaseApp* app)
     init_info.Queue = graphicsQueue;
     init_info.PipelineCache = nullptr; // TODO: PipelineCache
     init_info.DescriptorPool = m_DescriptorPool;
+    init_info.Subpass = 0;
     init_info.Allocator = nullptr; // TODO: Allocator
     init_info.MinImageCount = imageCount;
     init_info.ImageCount = imageCount;
     init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
-    // Dynamic rendering
-    //init_info.ColorAttachmentFormat = colorFormat;
-    //init_info.UseDynamicRendering = true;
     init_info.CheckVkResultFn = Vk::Utils::CheckVkResult;
-
     ImGui_ImplVulkan_Init(&init_info, m_RenderPass);
 
     // Load default font
@@ -108,8 +103,6 @@ bool VulkanImGUI::Initialize(VulkanBaseApp* app)
 
     CreateCommandPool();
     CreateCommandBuffers();
-
-    CreateSyncObjects();
 
     return true;
 }
@@ -136,11 +129,9 @@ void VulkanImGUI::Shutdown()
     {
         vkDestroyFramebuffer(device, framebuffer, nullptr);
     }
-
-    DestroySyncObjects();
 }
 
-void VulkanImGUI::StartFrame()
+void VulkanImGUI::StartNewFrame()
 {
     ImGui::SetCurrentContext(m_ImGuiContext);
 
@@ -154,6 +145,14 @@ void VulkanImGUI::StartFrame()
 
     // Render to generate draw buffers
     ImGui::Render();
+
+#if defined IMGUI_HAS_VIEWPORT
+    if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+    {
+        ImGui::UpdatePlatformWindows();
+        ImGui::RenderPlatformWindowsDefault();
+    }
+#endif // IMGUI_HAS_VIEWPORT
 }
 
 void VulkanImGUI::OnRecreateSwapchain()
@@ -180,50 +179,11 @@ void VulkanImGUI::OnRecreateSwapchain()
     CreateFramebuffers();
 }
 
-void VulkanImGUI::OnRender(uint32_t imageIndex)
+void VulkanImGUI::OnRender(uint32_t frameIndex, uint32_t imageIndex)
 {
-    StartFrame();
-
     ImDrawData* main_draw_data = ImGui::GetDrawData();
 
-    RecordCommandBuffer(m_CommandBuffers[imageIndex], imageIndex, main_draw_data);
-
-    //if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
-    //{
-    //    ImGui::UpdatePlatformWindows();
-    //    ImGui::RenderPlatformWindowsDefault();
-    //}
-}
-
-// BOOKMARK: RenderImGuiFrame
-void VulkanImGUI::RenderImGuiFrame(uint32_t imageIndex, uint32_t frameIdx, ImDrawData* draw_data)
-{
-    /*
-
-    RecordCommandBuffer(imageIndex, frameIdx, draw_data);
-
-    const VkQueue graphicsQueue = m_App->GetGraphicsQueue();
-    const VkDevice device = m_App->GetVkDevice();
-
-    VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-
-    Vk::SyncObject syncObject2 = m_FramesInFlight.NextSyncObject();
-
-    const VkSubmitInfo submitInfo = {
-        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-        .waitSemaphoreCount = 1,
-        .pWaitSemaphores = &syncObject2.imageAvailableSemaphore,
-        .pWaitDstStageMask = &wait_stage,
-        .commandBufferCount = 1,
-        .pCommandBuffers = &m_CommandBuffers[frameIdx],
-        .signalSemaphoreCount = 1,
-        .pSignalSemaphores = &syncObject2.renderFinishedSemaphore,
-    };
-
-    vkResetFences(device, 1, &syncObject2.fence);
-
-    VK_CHECK(vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE));
-*/
+    RecordCommandBuffer(m_CommandBuffers[frameIndex], imageIndex, main_draw_data);
 }
 
 void VulkanImGUI::RecordCommandBuffer(VkCommandBuffer cmdBuffer, uint32_t imageIndex, ImDrawData* draw_data)
@@ -261,38 +221,8 @@ void VulkanImGUI::RecordCommandBuffer(VkCommandBuffer cmdBuffer, uint32_t imageI
     VK_CHECK(vkEndCommandBuffer(cmdBuffer));
 }
 
-void VulkanImGUI::CreateSyncObjects()
-{
-    assert(m_App && m_App->GetMaxFramesInFlight() > 0);
-
-    const uint32_t maxFramesInFlight = m_App->GetMaxFramesInFlight();
-    const VkDevice device = m_App->GetVkDevice();
-
-    //m_FramesInFlight.Initialize(device, maxFramesInFlight);
-    //m_RenderFinishedSemaphores.resize(m_App->GetMaxFramesInFlight());
-    //
-    //VkSemaphoreCreateInfo semaphoreInfo{};
-    //semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-
-    //for (size_t i = 0; i < maxFramesInFlight; ++i)
-    //{
-    //    VK_CHECK(vkCreateSemaphore(device, &semaphoreInfo, nullptr, &m_RenderFinishedSemaphores[i]));
-    //}
-}
-
-void VulkanImGUI::DestroySyncObjects()
-{
-    assert(m_App && m_App->GetMaxFramesInFlight() > 0);
-
-    //m_FramesInFlight.Destroy();
-    //for (size_t i = 0; i < maxFramesInFlight; ++i)
-    //{
-    //    vkDestroySemaphore(device, m_RenderFinishedSemaphores[i], nullptr);
-    //}
-}
-
 void VulkanImGUI::CreateRenderPass()
-{
+{ 
     assert(m_App);
 
     const VkDevice device = m_App->GetVkDevice();

@@ -35,7 +35,7 @@ public:
 
     void InitWindow();
 
-    void PresentFrame(Vk::SyncObject syncObject, uint32_t imageIndex, uint32_t frameIdx);
+    void PresentFrame(Vk::SyncObject syncObject, uint32_t frameIdx, uint32_t imageIndex);
 
     virtual void OnRender() = 0;
     virtual void UpdateUniformBuffer(uint32_t frameIdx) = 0;
@@ -152,7 +152,6 @@ protected:
     std::vector<VkCommandBuffer> m_CommandBuffers;
 
     Vk::FramesInFlight m_FramesInFlight;
-    uint32_t m_FrameBufferImageIndex = 0;
 
     std::vector<VkFence> m_ImagesInFlight;
 

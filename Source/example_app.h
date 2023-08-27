@@ -116,7 +116,7 @@ private:
     VkCommandBuffer BeginSingleTimeCommands();
     void EndSingleTimeCommands(VkCommandBuffer commandBuffer);
 
-    void UpdateUniformBuffer(uint32_t currentImage) override;
+    void UpdateUniformBuffer(uint32_t frameIndex) override;
 
     void DrawFrame();
 

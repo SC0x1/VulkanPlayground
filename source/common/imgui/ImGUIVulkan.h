@@ -13,17 +13,15 @@ public:
     bool Initialize(VulkanBaseApp* app);
     void Shutdown();
 
-    void StartFrame();
+    void StartNewFrame();
 
-    void OnRender(uint32_t imageIndex);
+    void OnRender(uint32_t frameIndex, uint32_t imageIndex);
 
     void OnRecreateSwapchain();
 
     VkCommandBuffer GetCommandBuffer(uint32_t frameID) const;
 
 private:
-
-    void RenderImGuiFrame(uint32_t imageIndex, uint32_t frameIdx, ImDrawData* draw_data);
 
     void RecordCommandBuffer(VkCommandBuffer cmdBuffer, uint32_t imageIndex, ImDrawData* draw_data);
 
@@ -34,9 +32,6 @@ private:
 
     void CreateCommandPool();
     void DestroyCommandPool();
-
-    void CreateSyncObjects();
-    void DestroySyncObjects();
 
     ImGuiContext* m_ImGuiContext{ nullptr };
 
