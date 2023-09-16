@@ -35,10 +35,10 @@ public:
 
     void InitWindow();
 
-    void PresentFrame(Vk::SyncObject syncObject, uint32_t frameIdx, uint32_t imageIndex);
+    void PresentFrame(Vk::SyncObject syncObject, uint32_t frameIndex, uint32_t imageIndex);
 
     virtual void OnRender() = 0;
-    virtual void UpdateUniformBuffer(uint32_t frameIdx) = 0;
+    virtual void UpdateUniformBuffer(uint32_t frameIndex) = 0;
 
     VkCommandBuffer BeginSingleTimeCommands();
     void EndSingleTimeCommands(VkCommandBuffer commandBuffer);
@@ -153,7 +153,7 @@ protected:
 
     Vk::FramesInFlight m_FramesInFlight;
 
-    std::vector<VkFence> m_ImagesInFlight;
+    //std::vector<VkFence> m_ImagesInFlight;
 
     const std::vector<const char*> m_ValidationLayers =
     {
@@ -166,7 +166,7 @@ protected:
     };
 
     // ImGui
-    VulkanImGUI m_ImGuiLayer;
+    ImGuiRenderer m_ImGuiLayer;
     bool m_IsImGuiEnabled = true;
 
 #ifdef NDEBUG

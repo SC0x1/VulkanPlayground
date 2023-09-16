@@ -108,7 +108,7 @@ void VulkanBaseApp::OnInitialize()
     CreateFramebuffers();
 
     m_FramesInFlight.Initialize(m_Device, m_MaxFramesInFlight);
-    m_ImagesInFlight.resize(m_MaxFramesInFlight, VK_NULL_HANDLE);
+    //m_ImagesInFlight.resize(m_MaxFramesInFlight, VK_NULL_HANDLE);
 }
 
 void VulkanBaseApp::MainLoop()
@@ -179,7 +179,7 @@ void VulkanBaseApp::InitWindow()
     glfwSetFramebufferSizeCallback(m_Window, FramebufferResizeCallback);
 }
 
-void VulkanBaseApp::PresentFrame(Vk::SyncObject syncObject, uint32_t frameIdx, uint32_t imageIndex)
+void VulkanBaseApp::PresentFrame(Vk::SyncObject syncObject, uint32_t frameIndex, uint32_t imageIndex)
 {
     //////////////////////////////////////////////////////////////////////////
     // Submitting the command buffer
@@ -192,8 +192,7 @@ void VulkanBaseApp::PresentFrame(Vk::SyncObject syncObject, uint32_t frameIdx, u
     VkSemaphore waitSemaphores[] = { syncObject.imageAvailableSemaphore };
     VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
 
-    VkCommandBuffer imGuiCommandBuffer = m_ImGuiLayer.GetCommandBuffer(frameIdx);
-    std::array<VkCommandBuffer, 2> cmdBuffers = { m_CommandBuffers[frameIdx], imGuiCommandBuffer };
+    std::array<VkCommandBuffer, 1> cmdBuffers = { m_CommandBuffers[frameIndex] };
 
     submitInfo.waitSemaphoreCount = 1;
     submitInfo.pWaitSemaphores = waitSemaphores;
@@ -225,6 +224,9 @@ void VulkanBaseApp::PresentFrame(Vk::SyncObject syncObject, uint32_t frameIdx, u
     {
         throw std::runtime_error("failed to submit draw command buffer!");
     }
+
+    m_ImGuiLayer.EndFrame(frameIndex, imageIndex);
+    
     // The function takes an array of VkSubmitInfo structures as argument for
     // efficiency when the workload is much larger.
     // The last parameter references an optional fence that will be signaled
@@ -516,7 +518,7 @@ void VulkanBaseApp::OnRecreateSwapchain()
 
 void VulkanBaseApp::CleanupSwapChain()
 {
-    m_ImagesInFlight.resize(m_MaxFramesInFlight, VK_NULL_HANDLE);
+    //m_ImagesInFlight.resize(m_MaxFramesInFlight, VK_NULL_HANDLE);
 
     // Cleanup Color image MSAA
     vkDestroyImageView(m_Device, m_ColorImageView, nullptr);
@@ -804,10 +806,23 @@ void VulkanBaseApp::EndSingleTimeCommands(VkCommandBuffer commandBuffer)
     submitInfo.commandBufferCount = 1;
     submitInfo.pCommandBuffers = &commandBuffer;
 
-    vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
-    vkQueueWaitIdle(m_GraphicsQueue);
+    // Create fence to ensure that the command buffer has finished executing
+    VkFenceCreateInfo fenceInfo{};
+    fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    fenceInfo.flags = VK_FLAGS_NONE;
+    VkFence fence;
+    VK_CHECK(vkCreateFence(m_Device, &fenceInfo, nullptr, &fence));
 
-    vkFreeCommandBuffers(m_Device, m_CommandPool, 1, &commandBuffer);
+    // Submit to the queue
+    vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, fence);
+
+    // Wait for the fence to signal that command buffer has finished executing
+    VK_CHECK(vkWaitForFences(m_Device, 1, &fence, VK_TRUE, DEFAULT_FENCE_TIMEOUT));
+    vkDestroyFence(m_Device, fence, nullptr);
+    //if (flag_free)
+    {
+        vkFreeCommandBuffers(m_Device, m_CommandPool, 1, &commandBuffer);
+    }
 }
 
 VkImageView VulkanBaseApp::CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels) const

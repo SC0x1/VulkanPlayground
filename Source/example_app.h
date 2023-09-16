@@ -122,6 +122,8 @@ private:
 
     void LoadModel();
 
+    VkPipeline GetGraphicsPipeline() const;
+
 private:
     // Pipeline
     VkDescriptorSetLayout m_DescriptorSetLayout; // UBO
@@ -152,3 +154,8 @@ private:
     VkImageView m_TextureImageView;
     VkSampler m_TextureSampler;
 };
+
+inline VkPipeline VulkanExample::GetGraphicsPipeline() const
+{
+    return m_GraphicsPipeline;
+}

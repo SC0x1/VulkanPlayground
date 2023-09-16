@@ -77,27 +77,58 @@ namespace Utils
         return 0xFFFFFFFF;
     }
 
-    void CreateBuffer(VkDevice device, VkPhysicalDevice physicalDevice, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory)
+    void CreateBuffer(VkDevice device, VkPhysicalDevice physicalDevice, VkDeviceSize size, VkBufferUsageFlags usageFlags, VkMemoryPropertyFlags properties, VkBuffer* buffer, VkDeviceMemory* bufferMemory, void* data)
     {
         VkBufferCreateInfo bufferInfo{};
         bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
         bufferInfo.size = size;
-        bufferInfo.usage = usage;
+        bufferInfo.usage = usageFlags;
         bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-        VK_CHECK(vkCreateBuffer(device, &bufferInfo, nullptr, &buffer));
+        VK_CHECK(vkCreateBuffer(device, &bufferInfo, nullptr, buffer));
 
         VkMemoryRequirements memRequirements;
-        vkGetBufferMemoryRequirements(device, buffer, &memRequirements);
+        vkGetBufferMemoryRequirements(device, *buffer, &memRequirements);
 
         VkMemoryAllocateInfo allocInfo{};
         allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
         allocInfo.allocationSize = memRequirements.size;
         allocInfo.memoryTypeIndex = Utils::FindMemoryType(physicalDevice, memRequirements.memoryTypeBits, properties);
+        
+        // If the buffer has VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT set we also
+        // need to enable the appropriate flag during allocation.
+        VkMemoryAllocateFlagsInfoKHR allocFlagsInfo {};
+        if (usageFlags & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)
+        {
+            allocFlagsInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO_KHR;
+            allocFlagsInfo.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT_KHR;
+            allocInfo.pNext = &allocFlagsInfo;
+        }
 
-        VK_CHECK(vkAllocateMemory(device, &allocInfo, nullptr, &bufferMemory));
+        VK_CHECK(vkAllocateMemory(device, &allocInfo, nullptr, bufferMemory));
+        
+        // If a pointer to the buffer data has been passed, map the buffer and copy over the data
+        if (data != nullptr)
+        {
+            void* mapped = nullptr;
+            VK_CHECK(vkMapMemory(device, *bufferMemory, 0, size, 0, &mapped));
 
-        vkBindBufferMemory(device, buffer, bufferMemory, 0);
+            memcpy(mapped, data, size);
+
+            // If host coherency hasn't been requested, do a manual flush to make writes visible
+            if ((properties & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) == 0)
+            {
+                VkMappedMemoryRange mappedRange{};
+                mappedRange.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+                mappedRange.memory = *bufferMemory;
+                mappedRange.offset = 0;
+                mappedRange.size = size;
+                vkFlushMappedMemoryRanges(device, 1, &mappedRange);
+            }
+            vkUnmapMemory(device, *bufferMemory);
+        }
+
+        vkBindBufferMemory(device, *buffer, *bufferMemory, 0);
     }
 
     void CreateImage2D(VkDevice device, VkPhysicalDevice physicalDevice, uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory)
@@ -147,6 +178,16 @@ namespace Utils
         createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
         createInfo.codeSize = code.size();
         createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
+
+        VK_CHECK_RET(vkCreateShaderModule(device, &createInfo, nullptr, &vkShaderModule));
+    }
+
+    VkResult CreateShaderModule(VkDevice device, const uint32_t* code, uint32_t codeSize, VkShaderModule& vkShaderModule)
+    {
+        VkShaderModuleCreateInfo createInfo{};
+        createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+        createInfo.codeSize = codeSize;
+        createInfo.pCode = code;
 
         VK_CHECK_RET(vkCreateShaderModule(device, &createInfo, nullptr, &vkShaderModule));
     }
@@ -230,6 +271,171 @@ namespace Utils
 
         return imageView;
     }
+
+    void SetImageLayout(
+        VkCommandBuffer cmdbuffer,
+        VkImage image,
+        VkImageLayout oldImageLayout,
+        VkImageLayout newImageLayout,
+        VkImageSubresourceRange subresourceRange,
+        VkPipelineStageFlags srcStageMask,
+        VkPipelineStageFlags dstStageMask)
+    {
+        // Create an image barrier object
+        VkImageMemoryBarrier imageMemoryBarrier{};
+        imageMemoryBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        imageMemoryBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        imageMemoryBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+
+        imageMemoryBarrier.oldLayout = oldImageLayout;
+        imageMemoryBarrier.newLayout = newImageLayout;
+        imageMemoryBarrier.image = image;
+        imageMemoryBarrier.subresourceRange = subresourceRange;
+
+        // Source layouts (old)
+        // Source access mask controls actions that have to be finished on the old layout
+        // before it will be transitioned to the new layout
+        switch (oldImageLayout)
+        {
+        case VK_IMAGE_LAYOUT_UNDEFINED:
+            // Image layout is undefined (or does not matter)
+            // Only valid as initial layout
+            // No flags required, listed only for completeness
+            imageMemoryBarrier.srcAccessMask = 0;
+            break;
+
+        case VK_IMAGE_LAYOUT_PREINITIALIZED:
+            // Image is preinitialized
+            // Only valid as initial layout for linear images, preserves memory contents
+            // Make sure host writes have been finished
+            imageMemoryBarrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
+            break;
+
+        case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
+            // Image is a color attachment
+            // Make sure any writes to the color buffer have been finished
+            imageMemoryBarrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            break;
+
+        case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
+            // Image is a depth/stencil attachment
+            // Make sure any writes to the depth/stencil buffer have been finished
+            imageMemoryBarrier.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+            break;
+
+        case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
+            // Image is a transfer source
+            // Make sure any reads from the image have been finished
+            imageMemoryBarrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+            break;
+
+        case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
+            // Image is a transfer destination
+            // Make sure any writes to the image have been finished
+            imageMemoryBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+            break;
+
+        case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
+            // Image is read by a shader
+            // Make sure any shader reads from the image have been finished
+            imageMemoryBarrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+            break;
+        default:
+            // Other source layouts aren't handled (yet)
+            break;
+        }
+
+        // Target layouts (new)
+        // Destination access mask controls the dependency for the new image layout
+        switch (newImageLayout)
+        {
+        case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
+            // Image will be used as a transfer destination
+            // Make sure any writes to the image have been finished
+            imageMemoryBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+            break;
+
+        case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
+            // Image will be used as a transfer source
+            // Make sure any reads from the image have been finished
+            imageMemoryBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+            break;
+
+        case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
+            // Image will be used as a color attachment
+            // Make sure any writes to the color buffer have been finished
+            imageMemoryBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            break;
+
+        case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
+            // Image layout will be used as a depth/stencil attachment
+            // Make sure any writes to depth/stencil buffer have been finished
+            imageMemoryBarrier.dstAccessMask = imageMemoryBarrier.dstAccessMask | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+            break;
+
+        case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
+            // Image will be read in a shader (sampler, input attachment)
+            // Make sure any writes to the image have been finished
+            if (imageMemoryBarrier.srcAccessMask == 0)
+            {
+                imageMemoryBarrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
+            }
+            imageMemoryBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+            break;
+        default:
+            // Other source layouts aren't handled (yet)
+            break;
+        }
+
+        // Put barrier inside setup command buffer
+        vkCmdPipelineBarrier(
+            cmdbuffer,
+            srcStageMask,
+            dstStageMask,
+            0,
+            0, nullptr,
+            0, nullptr,
+            1, &imageMemoryBarrier);
+    }
+
+    void SetImageLayout(
+        VkCommandBuffer cmdbuffer,
+        VkImage image,
+        VkImageAspectFlags aspectMask,
+        VkImageLayout oldImageLayout,
+        VkImageLayout newImageLayout,
+        VkPipelineStageFlags srcStageMask,
+        VkPipelineStageFlags dstStageMask)
+    {
+        VkImageSubresourceRange subresourceRange = {};
+        subresourceRange.aspectMask = aspectMask;
+        subresourceRange.baseMipLevel = 0;
+        subresourceRange.levelCount = 1;
+        subresourceRange.layerCount = 1;
+        SetImageLayout(cmdbuffer, image, oldImageLayout, newImageLayout, subresourceRange, srcStageMask, dstStageMask);
+    }
+
 }
 
 vkEND_NAMESPACE
+
+namespace Helpers
+{
+    void ReadFile(const std::string& filename, std::vector<char>& buffer)
+    {
+        std::ifstream file(filename, std::ios::ate | std::ios::binary);
+
+        if (!file.is_open())
+        {
+            throw std::runtime_error("failed to open file!");
+        }
+
+        size_t fileSize = (size_t)file.tellg();
+        buffer.resize(fileSize);
+
+        file.seekg(0);
+        file.read(buffer.data(), fileSize);
+
+        file.close();
+    }
+};

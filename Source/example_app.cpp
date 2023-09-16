@@ -14,24 +14,6 @@ QB_SINGLETON_GENERIC_DEFINE(VulkanExample);
 const std::string MODEL_PATH = "models/viking_room.obj";
 const std::string TEXTURE_PATH = "textures/viking_room.png";
 
-void ReadFile(const std::string& filename, std::vector<char>& buffer)
-{
-    std::ifstream file(filename, std::ios::ate | std::ios::binary);
-
-    if (!file.is_open())
-    {
-        throw std::runtime_error("failed to open file!");
-    }
-
-    size_t fileSize = (size_t)file.tellg();
-    buffer.resize(fileSize);
-
-    file.seekg(0);
-    file.read(buffer.data(), fileSize);
-
-    file.close();
-}
-
 VulkanExample::VulkanExample()
 {
 
@@ -102,7 +84,7 @@ void VulkanExample::OnCleanup()
 
 void VulkanExample::OnRender()
 {
-    //m_ImGuiLayer.StartFrame();
+    m_ImGuiLayer.StartFrame();
     DrawFrame();
 }
 
@@ -148,9 +130,9 @@ void VulkanExample::CreateGraphicsPipeline()
     const std::string pathVert = std::string("shaders/vert.spv");
     const std::string pathFrag = std::string("shaders/frag.spv");
 
-    ReadFile(pathVert.c_str(), vertShaderCode);
+    Helpers::ReadFile(pathVert.c_str(), vertShaderCode);
     std::vector<char> fragShaderCode;
-    ReadFile(pathFrag.c_str(), fragShaderCode);
+    Helpers::ReadFile(pathFrag.c_str(), fragShaderCode);
 
     VkShaderModule vertShaderModule;
     VK_CHECK(Vk::Utils::CreateShaderModule(m_Device, vertShaderCode, vertShaderModule));
@@ -303,18 +285,21 @@ void VulkanExample::CreateGraphicsPipeline()
     colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
     colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD; // Optional
     /*
-    This per-framebuffer struct allows you to configure the first way of color blending. The operations that will be performed are best demonstrated using the following pseudocode:
+    This per-framebuffer struct allows you to configure the first way of color blending.
+    The operations that will be performed are best demonstrated using the following pseudocode:
 
-        if (blendEnable) {
-            finalColor.rgb = (srcColorBlendFactor * newColor.rgb) <colorBlendOp> (dstColorBlendFactor * oldColor.rgb);
-            finalColor.a = (srcAlphaBlendFactor * newColor.a) <alphaBlendOp> (dstAlphaBlendFactor * oldColor.a);
-        } else {
-            finalColor = newColor;
-        }
+    if (blendEnable) {
+        finalColor.rgb = (srcColorBlendFactor * newColor.rgb) <!colorBlendOp!> (dstColorBlendFactor * oldColor.rgb);
+        finalColor.a = (srcAlphaBlendFactor * newColor.a) <!alphaBlendOp!> (dstAlphaBlendFactor * oldColor.a);
+    } else {
+        finalColor = newColor;
+    }
 
-        finalColor = finalColor & colorWriteMask;
+    finalColor = finalColor & colorWriteMask;
 
-    The most common way to use color blending is to implement alpha blending, where we want the new color to be blended with the old color based on its opacity. The finalColor should then be computed as follows:
+    The most common way to use color blending is to implement alpha blending,
+    where we want the new color to be blended with the old color based on its opacity.
+    The finalColor should then be computed as follows:
 
         finalColor.rgb = newAlpha * newColor + (1 - newAlpha) * oldColor;
         finalColor.a = newAlpha.a;
@@ -425,7 +410,7 @@ void VulkanExample::CreateTextureImage()
     VkDeviceMemory stagingBufferMemory;
 
     Vk::Utils::CreateBuffer(m_Device, m_PhysicalDevice, imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &stagingBuffer, &stagingBufferMemory);
 
     void* data;
     vkMapMemory(m_Device, stagingBufferMemory, 0, imageSize, 0, &data);
@@ -538,14 +523,18 @@ void VulkanExample::CreateVertexBuffer()
     VkBuffer stagingBuffer;
     VkDeviceMemory stagingBufferMemory;
     
-    Vk::Utils::CreateBuffer(m_Device, m_PhysicalDevice, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+    Vk::Utils::CreateBuffer(m_Device, m_PhysicalDevice, bufferSize,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        &stagingBuffer, &stagingBufferMemory);
 
     void* data;
     vkMapMemory(m_Device, stagingBufferMemory, 0, bufferSize, 0, &data);
     memcpy(data, m_Vertices.data(), (size_t)bufferSize);
     vkUnmapMemory(m_Device, stagingBufferMemory);
 
-    Vk::Utils::CreateBuffer(m_Device, m_PhysicalDevice, bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_VertexBuffer, m_VertexBufferMemory);
+    Vk::Utils::CreateBuffer(m_Device, m_PhysicalDevice, bufferSize,
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        &m_VertexBuffer, &m_VertexBufferMemory);
 
     CopyBuffer(stagingBuffer, m_VertexBuffer, bufferSize);
 
@@ -569,14 +558,18 @@ void VulkanExample::CreateIndexBuffer()
 
     VkBuffer stagingBuffer;
     VkDeviceMemory stagingBufferMemory;
-    Vk::Utils::CreateBuffer(m_Device, m_PhysicalDevice, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+    Vk::Utils::CreateBuffer(m_Device, m_PhysicalDevice, bufferSize,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        &stagingBuffer, &stagingBufferMemory);
 
     void* data;
     vkMapMemory(m_Device, stagingBufferMemory, 0, bufferSize, 0, &data);
     memcpy(data, m_Indices.data(), (size_t)bufferSize);
     vkUnmapMemory(m_Device, stagingBufferMemory);
 
-    Vk::Utils::CreateBuffer(m_Device, m_PhysicalDevice, bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_IndexBuffer, m_IndexBufferMemory);
+    Vk::Utils::CreateBuffer(m_Device, m_PhysicalDevice, bufferSize,
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        &m_IndexBuffer, &m_IndexBufferMemory);
 
     CopyBuffer(stagingBuffer, m_IndexBuffer, bufferSize);
 
@@ -596,7 +589,7 @@ void VulkanExample::CreateUniformBuffers()
     {
         Vk::Utils::CreateBuffer(m_Device, m_PhysicalDevice, bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-            m_UniformBuffers[i], m_UniformBuffersMemory[i]);
+            &m_UniformBuffers[i], &m_UniformBuffersMemory[i]);
 
         vkMapMemory(m_Device, m_UniformBuffersMemory[i], 0, bufferSize, 0, &m_UniformBuffersMapped[i]);
     }
@@ -848,8 +841,6 @@ void VulkanExample::DrawFrame()
     // Reset the in-flight fences so we do not get blocked waiting on in-flight images
     m_FramesInFlight.ResetFence(frameIndex);
 
-    m_ImGuiLayer.StartNewFrame();
-
     UpdateUniformBuffer(frameIndex);
 
     if (imageIndexOpt.has_value())
@@ -866,8 +857,6 @@ void VulkanExample::DrawFrame()
 
         // Now call the function recordCommandBuffer to record the commands we want.
         RecordCommandBuffer(m_CommandBuffers[frameIndex], imageIndex);
-
-        m_ImGuiLayer.OnRender(frameIndex, imageIndex);
 
         VulkanBaseApp::PresentFrame(syncObject, frameIndex, imageIndex);
     }

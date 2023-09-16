@@ -403,7 +403,7 @@ VkResult Device::CreateBuffer(VkBufferUsageFlags usageFlags, VkMemoryPropertyFla
         memAlloc.pNext = &allocFlagsInfo;
     }
 
-    VK_CHECK(vkAllocateMemory(m_LogicalDevice, &memAlloc, nullptr, &buffer->m_DeviceMemory));
+    VK_CHECK(vkAllocateMemory(m_LogicalDevice, &memAlloc, nullptr, &buffer->m_Memory));
 
     buffer->m_Alignment = memReqs.alignment;
     buffer->m_Size = size;
@@ -413,21 +413,21 @@ VkResult Device::CreateBuffer(VkBufferUsageFlags usageFlags, VkMemoryPropertyFla
     // If a pointer to the buffer data has been passed, map the buffer and copy over the data
     if (data != nullptr)
     {
-        VK_CHECK(buffer->map());
+        VK_CHECK(buffer->Map());
         memcpy(buffer->m_Mapped, data, size);
         if ((memoryPropertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) == 0)
         {
-            buffer->flush();
+            buffer->Flush();
         }
 
-        buffer->unmap();
+        buffer->UnMap();
     }
 
     // Initialize a default descriptor that covers the whole buffer size
-    buffer->setupDescriptor();
+    buffer->SetupDescriptor();
 
     // Attach the memory to the buffer object
-    return buffer->bind();
+    return buffer->Bind();
 }
 
 /**
