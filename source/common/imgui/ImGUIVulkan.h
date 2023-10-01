@@ -34,6 +34,7 @@ class ImGuiRenderer
     };
 
 public:
+    ImGuiRenderer();
 
     bool Initialize(VulkanBaseApp* app);
     void Shutdown();
@@ -47,7 +48,9 @@ public:
 
     bool IsSkippingFrame() const;
 
-private:
+    VulkanBaseApp* GetVulkanBaseApp() const;
+
+//private:
     void InitializePlatformCallbacks();
     void InitializeRendererCallbacks();
 
@@ -56,7 +59,7 @@ private:
     void RecordCommandBuffer(VkCommandBuffer cmdBuffer, uint32_t imageIndex, ImDrawData* draw_data);
     void SubmitCommandBuffer(VkCommandBuffer cmdBuffer);
 
-    void CreateRenderPass(VkRenderPass& renderPass, bool mainSwapchainFormat) const;
+    static void CreateRenderPass(VkRenderPass& renderPass, VkFormat format, VkAttachmentLoadOp loadOp);
     void CreateDescriptorPool();
     void CreateFramebuffers();
     void CreateCommandBuffers();
@@ -66,10 +69,17 @@ private:
     void CreateCommandPool();
     void DestroyCommandPool();
 
-    void CreatePipeline();
+    void CreatePipeline(VkPipeline& pipeline, const VkRenderPass renderPass);
 
-    void UpdateBuffers();
-    void DrawFrameMain(VkCommandBuffer cmdBuffer);
+    static void UpdateBuffers(ImDrawData* imDrawData, Vk::Buffer& vertexBuffer,
+        uint32_t& vertexCount, Vk::Buffer& indexBuffer, uint32_t& indexCount);
+
+    void DrawFrameMain(ImDrawData* imDrawData, VkCommandBuffer cmdBuffer);
+    void DrawFrameViewport(ImGuiViewport* vp, VkCommandBuffer cmdBuffer);
+    void DrawFrame(ImDrawData* imDrawData, VkCommandBuffer cmdBuffer,
+        Vk::Buffer& vertexBuffer, Vk::Buffer& indexBuffer, float width, float height);
+
+    void RenderViewports();
 
     PushConstantsBlock m_PushConstants;
 
@@ -96,6 +106,7 @@ private:
     VkPipelineCache m_PipelineCacheDocking{ VK_NULL_HANDLE };
     VkPipelineLayout m_PipelineLayoutDocking{ VK_NULL_HANDLE };
     VkPipeline m_PipelineDocking{ VK_NULL_HANDLE };
+    VkPipeline m_PipelineMain{ VK_NULL_HANDLE };
 
     VkDescriptorPool m_DescriptorPoolDocking{ VK_NULL_HANDLE };
     VkDescriptorSetLayout m_DescriptorSetLayoutDocking{ VK_NULL_HANDLE };
@@ -107,8 +118,8 @@ private:
 
     Vk::Buffer m_VertexBuffer;
     Vk::Buffer m_IndexBuffer;
-    int32_t m_VertexCount = 0;
-    int32_t m_IndexCount = 0;
+    uint32_t m_VertexCount = 0;
+    uint32_t m_IndexCount = 0;
 
     //std::vector<VkSemaphore> m_RenderFinishedSemaphores;
     //Vk::FramesInFlight m_FramesInFlight;
@@ -121,6 +132,8 @@ private:
 
     bool m_IsSkippingFrame = false;
     bool m_UseDefaultRenderer = false;
+
+    static ImGuiRenderer* m_This;
 };
 
 inline VkCommandBuffer ImGuiRenderer::GetCommandBuffer(uint32_t frameID) const

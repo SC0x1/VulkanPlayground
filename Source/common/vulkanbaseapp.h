@@ -35,6 +35,8 @@ public:
 
     void InitWindow();
 
+    void SubmitFrame(Vk::SyncObject syncObject, uint32_t frameIndex, uint32_t imageIndex);
+
     void PresentFrame(Vk::SyncObject syncObject, uint32_t frameIndex, uint32_t imageIndex);
 
     virtual void OnRender() = 0;
@@ -52,11 +54,14 @@ public:
     VkDevice GetVkDevice() const;
     Vk::QueueFamilyIndices GetQueueFamilyIndices() const;
     VkQueue GetGraphicsQueue() const;
+    VkQueue GetPresentQueue() const;
+
     uint32_t GetSwapChainImageCount() const;
     VkRenderPass GetRenderPass() const;
     VkCommandPool GetCommandPool() const;
     VkFormat GetSwapchainImageFormat() const;
 
+    VkSwapchainKHR GetVkSwapChain() const;
     VkExtent2D GetSwapChainExtend() const;
     const std::vector<VkImage>& GetSwapChainImages() const;
     const std::vector<VkImageView>& GetSwapChainImageViews() const;
@@ -198,6 +203,11 @@ inline Vk::QueueFamilyIndices VulkanBaseApp::GetQueueFamilyIndices() const
     return m_QueFamilyndices;
 }
 
+inline VkQueue VulkanBaseApp::GetPresentQueue() const
+{
+    return m_PresentQueue;
+}
+
 inline VkQueue VulkanBaseApp::GetGraphicsQueue() const
 {
     return m_GraphicsQueue;
@@ -221,6 +231,11 @@ inline VkCommandPool VulkanBaseApp::GetCommandPool() const
 inline VkFormat VulkanBaseApp::GetSwapchainImageFormat() const
 {
     return m_Swapchain.GetSurfaceFormat().format;
+}
+
+inline VkSwapchainKHR VulkanBaseApp::GetVkSwapChain() const
+{
+    return m_Swapchain.GetVkSwapChain();
 }
 
 inline VkExtent2D VulkanBaseApp::GetSwapChainExtend() const

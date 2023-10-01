@@ -165,7 +165,7 @@ void VulkanExample::CreateGraphicsPipeline()
     vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
     vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
     vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
-
+    
     VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
     inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
     inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
@@ -536,14 +536,14 @@ void VulkanExample::CreateVertexBuffer()
         VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
         &m_VertexBuffer, &m_VertexBufferMemory);
 
-    CopyBuffer(stagingBuffer, m_VertexBuffer, bufferSize);
+    CopyBuffer(stagingBuffer, m_VertexBuffer, bufferSize); 
 
     vkDestroyBuffer(m_Device, stagingBuffer, nullptr);
     vkFreeMemory(m_Device, stagingBufferMemory, nullptr);
     // The driver may not immediately copy the data into the buffer memory,
     // for example because of caching. It is also possible that writes to the buffer
     // are not visible in the mapped memory yet.
-    // There are two ways to deal with that problem:
+    // There are two ways to deal with that problem:372
     // * Use a memory heap that is host coherent, indicated with
     // VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
     // * Call vkFlushMappedMemoryRanges after writing to the mapped memory,
@@ -857,6 +857,10 @@ void VulkanExample::DrawFrame()
 
         // Now call the function recordCommandBuffer to record the commands we want.
         RecordCommandBuffer(m_CommandBuffers[frameIndex], imageIndex);
+
+        VulkanBaseApp::SubmitFrame(syncObject, frameIndex, imageIndex);
+
+        m_ImGuiLayer.EndFrame(frameIndex, imageIndex);
 
         VulkanBaseApp::PresentFrame(syncObject, frameIndex, imageIndex);
     }

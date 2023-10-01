@@ -18,12 +18,16 @@ void FramesInFlight::Initialize(VkDevice device, uint32_t maxFramesInFlight)
 
 void FramesInFlight::Destroy()
 {
-    for (size_t i = 0; i < m_MaxFramesInFlight; ++i)
+    if (m_IsInitialized)
     {
-        vkDestroySemaphore(m_Device, m_ImageAvailableSemaphores[i], nullptr);
-        vkDestroySemaphore(m_Device, m_RenderFinishedSemaphores[i], nullptr);
-        vkDestroyFence(m_Device, m_InFlightFences[i], nullptr);
+        for (size_t i = 0; i < m_MaxFramesInFlight; ++i)
+        {
+            vkDestroySemaphore(m_Device, m_ImageAvailableSemaphores[i], nullptr);
+            vkDestroySemaphore(m_Device, m_RenderFinishedSemaphores[i], nullptr);
+            vkDestroyFence(m_Device, m_InFlightFences[i], nullptr);
+        }
     }
+
     m_IsInitialized = false;
 }
 
@@ -66,11 +70,11 @@ SyncObject FramesInFlight::NextSyncObject()
 
     m_NextFrameIdx = (m_CurrentFrameIdx + 1) % m_MaxFramesInFlight;
 
-    return SyncObject {
-            imageAvailableSemaphore,
-            renderFinishedSemaphore,
-            fence,
-    };
+    m_LatestSyncObject.imageAvailableSemaphore = imageAvailableSemaphore;
+    m_LatestSyncObject.renderFinishedSemaphore = renderFinishedSemaphore;
+    m_LatestSyncObject.fence = fence;
+
+    return m_LatestSyncObject;
 }
 
 void FramesInFlight::ResetFence(uint32_t imageIndex)

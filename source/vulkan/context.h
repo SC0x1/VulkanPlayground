@@ -12,7 +12,7 @@ public:
 
     void Init();
 
-    const Device& GetDevice() const { m_Device; }
+    const Device& GetDevice() const { return m_Device; }
 
     static VkInstance GetInstance() { return s_VulkanInstance; }
 

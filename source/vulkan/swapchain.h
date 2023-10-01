@@ -1,6 +1,7 @@
 #pragma once
 
 #include "vulkan/utils.h"
+#include "vulkan/swapchaindetails.h"
 
 vkBEGIN_NAMESPACE
 
@@ -16,7 +17,17 @@ public:
     SwapChain();
     ~SwapChain();
 
-    void Create(VkDevice device, VkPhysicalDevice physicalDevice, VkSurfaceKHR surface, uint32_t preferredDimensions[2]);
+    void Create(VkDevice device, VkPhysicalDevice physicalDevice, VkSurfaceKHR surface,
+        uint32_t preferredDimensions[2], VkSwapchainKHR oldSwapchain = nullptr);
+
+    void Create(VkDevice device, VkPhysicalDevice physicalDevice, VkSurfaceKHR surface,
+        uint32_t preferredDimensions[2], const SurfaceFormatsRequest& sfRequest,
+        VkSwapchainKHR oldSwapchain = nullptr);
+
+    void Create(const SwapchainSupportDetails& details, VkSurfaceKHR surface,
+        uint32_t preferredDimensions[2], const SurfaceFormatsRequest& sfRequest,
+        VkSwapchainKHR oldSwapchain = nullptr);
+
     VkResult AcquireNextImage(VkSemaphore presentCompleteSemaphore, uint32_t* imageIndex);
     VkResult QueuePresent(VkQueue queue, uint32_t imageIndex, VkSemaphore waitSemaphore);
 
@@ -26,7 +37,7 @@ public:
 
     void Destroy();
 
-    VkSwapchainKHR GetSwapchain() const;
+    VkSwapchainKHR GetVkSwapChain() const;
 
     VkSurfaceFormatKHR GetSurfaceFormat() const;
     VkPresentModeKHR GetPresentMode() const;
@@ -46,7 +57,8 @@ private:
 
     void CreateSwapchain();
 
-    VkSwapchainKHR m_Swapchain{ VK_NULL_HANDLE };
+    VkSwapchainKHR m_SwapChain{ VK_NULL_HANDLE };
+    VkSwapchainKHR m_OldSwapchain{ VK_NULL_HANDLE };
 
     VkSurfaceKHR m_Surface{nullptr};
 
@@ -66,9 +78,9 @@ private:
     VkPhysicalDevice m_PhysicalDevice{ VK_NULL_HANDLE };
 };
 
-inline VkSwapchainKHR SwapChain::GetSwapchain() const
+inline VkSwapchainKHR SwapChain::GetVkSwapChain() const
 {
-    return m_Swapchain;
+    return m_SwapChain;
 }
 
 inline VkSurfaceFormatKHR SwapChain::GetSurfaceFormat() const
@@ -104,69 +116,6 @@ inline const std::vector<VkImage>& SwapChain::GetImages() const
 inline const std::vector<VkImageView>& SwapChain::GetImageViews() const
 {
     return m_ImageViews;
-}
-
-//////////////////////////////////////////////////////////////////////////
-// SwapchainSupportDetails
-/// 
-
-struct SwapChainDetails final
-{
-    VkSurfaceCapabilitiesKHR capabilities;
-    std::vector<VkSurfaceFormatKHR> surfaceFormats;
-    std::vector<VkPresentModeKHR> presentModes;
-};
-
-class SwapchainSupportDetails final
-{
-public:
-    SwapchainSupportDetails(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface);
-
-    const SwapChainDetails& GetSwapChainDetails() const;
-
-    VkSurfaceFormatKHR GetOptimalSurfaceFormat() const;
-
-    VkPresentModeKHR GetOptimalPresentMode() const;
-
-    VkExtent2D GetOptimalExtent(uint32_t preferredDimensions[2]) const;
-
-    uint32_t GetOptimalImageCount() const;
-
-    VkSurfaceCapabilitiesKHR GetCapabilities() const;
-
-    const std::vector<VkSurfaceFormatKHR>& GetSurfaceFormats() const;
-
-    const std::vector<VkPresentModeKHR>& GetPresentModes() const;
-
-    // Utils
-    static SwapChainDetails QuerySwapChainSupport(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface);
-    static VkSurfaceFormatKHR ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
-    static VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);
-    static VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities, uint32_t preferredDimensions[2]);
-
-private:
-
-    SwapChainDetails m_Details;
-};
-
-inline const SwapChainDetails& SwapchainSupportDetails::GetSwapChainDetails() const
-{
-    return m_Details;
-}
-
-inline VkSurfaceCapabilitiesKHR SwapchainSupportDetails::GetCapabilities() const
-{
-    return m_Details.capabilities;
-}
-
-inline const std::vector<VkSurfaceFormatKHR>& SwapchainSupportDetails::GetSurfaceFormats() const
-{
-    return m_Details.surfaceFormats;
-}
-
-inline const std::vector<VkPresentModeKHR>& SwapchainSupportDetails::GetPresentModes() const
-{
-    return m_Details.presentModes;
 }
 
 vkEND_NAMESPACE

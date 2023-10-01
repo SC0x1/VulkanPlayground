@@ -179,7 +179,7 @@ void VulkanBaseApp::InitWindow()
     glfwSetFramebufferSizeCallback(m_Window, FramebufferResizeCallback);
 }
 
-void VulkanBaseApp::PresentFrame(Vk::SyncObject syncObject, uint32_t frameIndex, uint32_t imageIndex)
+void VulkanBaseApp::SubmitFrame(Vk::SyncObject syncObject, uint32_t frameIndex, uint32_t imageIndex)
 {
     //////////////////////////////////////////////////////////////////////////
     // Submitting the command buffer
@@ -224,9 +224,10 @@ void VulkanBaseApp::PresentFrame(Vk::SyncObject syncObject, uint32_t frameIndex,
     {
         throw std::runtime_error("failed to submit draw command buffer!");
     }
+}
 
-    m_ImGuiLayer.EndFrame(frameIndex, imageIndex);
-    
+void VulkanBaseApp::PresentFrame(Vk::SyncObject syncObject, uint32_t frameIndex, uint32_t imageIndex)
+{
     // The function takes an array of VkSubmitInfo structures as argument for
     // efficiency when the workload is much larger.
     // The last parameter references an optional fence that will be signaled

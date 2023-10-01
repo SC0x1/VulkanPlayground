@@ -3,11 +3,13 @@
 
 vkBEGIN_NAMESPACE
 
-void SwapChain::Create(VkDevice device, VkPhysicalDevice physicalDevice, VkSurfaceKHR surface, uint32_t preferredDimensions[2])
+void SwapChain::Create(VkDevice device, VkPhysicalDevice physicalDevice, VkSurfaceKHR surface,
+    uint32_t preferredDimensions[2], VkSwapchainKHR oldSwapchain)
 {
     m_Device = device;
     m_PhysicalDevice = physicalDevice;
     m_Surface = surface;
+    m_OldSwapchain = oldSwapchain;
 
     const SwapchainSupportDetails supportDetails(physicalDevice, surface);
 
@@ -16,6 +18,39 @@ void SwapChain::Create(VkDevice device, VkPhysicalDevice physicalDevice, VkSurfa
     m_PresentMode = supportDetails.GetOptimalPresentMode();
     m_Extent = supportDetails.GetOptimalExtent(preferredDimensions);
     m_ImageCount = supportDetails.GetOptimalImageCount();
+
+    CreateSwapchain();
+}
+
+void SwapChain::Create(VkDevice device, VkPhysicalDevice physicalDevice, VkSurfaceKHR surface,
+    uint32_t preferredDimensions[2], const SurfaceFormatsRequest& sfRequest,
+    VkSwapchainKHR oldSwapchain)
+{
+    m_Device = device;
+    m_PhysicalDevice = physicalDevice;
+    m_Surface = surface;
+    m_OldSwapchain = oldSwapchain;
+
+    const SwapchainSupportDetails supportDetails(physicalDevice, surface);
+
+    m_Capabilities = supportDetails.GetCapabilities();
+    m_SurfaceFormat = supportDetails.GetOptimalSurfaceFormat(sfRequest);
+    m_PresentMode = supportDetails.GetOptimalPresentMode();
+    m_Extent = supportDetails.GetOptimalExtent(preferredDimensions);
+    m_ImageCount = supportDetails.GetOptimalImageCount();
+
+    CreateSwapchain();
+}
+
+void SwapChain::Create(const SwapchainSupportDetails& details, VkSurfaceKHR surface,
+    uint32_t preferredDimensions[2], const SurfaceFormatsRequest& sfRequest,
+    VkSwapchainKHR oldSwapchain)
+{
+    m_Capabilities = details.GetCapabilities();
+    m_SurfaceFormat = details.GetOptimalSurfaceFormat(sfRequest);
+    m_PresentMode = details.GetOptimalPresentMode();
+    m_Extent = details.GetOptimalExtent(preferredDimensions);
+    m_ImageCount = details.GetOptimalImageCount();
 
     CreateSwapchain();
 }
@@ -70,24 +105,31 @@ void SwapChain::CreateSwapchain()
     // you'll get the best performance by enabling clipping
     createInfo.clipped = VK_TRUE;
 
-    createInfo.oldSwapchain = VK_NULL_HANDLE;
+    createInfo.oldSwapchain = m_OldSwapchain;
 
-    if (vkCreateSwapchainKHR(m_Device, &createInfo, nullptr, &m_Swapchain) != VK_SUCCESS)
-    {
-        throw std::runtime_error("failed to create swap chain!");
-    }
+    VkResult result;
+    result = vkCreateSwapchainKHR(m_Device, &createInfo, nullptr, &m_SwapChain);
+    VK_CHECK(result);
 
-    vkGetSwapchainImagesKHR(m_Device, m_Swapchain, &m_ImageCount, nullptr);
+    result = vkGetSwapchainImagesKHR(m_Device, m_SwapChain, &m_ImageCount, nullptr);
+    VK_CHECK(result);
+
     m_Images.resize(m_ImageCount);
-    vkGetSwapchainImagesKHR(m_Device, m_Swapchain, &m_ImageCount, m_Images.data());
+
+    result = vkGetSwapchainImagesKHR(m_Device, m_SwapChain, &m_ImageCount, m_Images.data());
+    VK_CHECK(result);
 
     m_ImageViews.resize(m_Images.size());
 
-    for (size_t i = 0; i < m_Images.size(); i++)
+    for (uint32_t i = 0; i < m_Images.size(); i++)
     {
-        m_ImageViews[i] = Vk::Utils::CreateImageView2D(
-            m_Device, m_Images[i], m_SurfaceFormat.format,
-            VK_IMAGE_ASPECT_COLOR_BIT, 1);
+        m_ImageViews[i] = Vk::Utils::CreateImageView2D(m_Device, m_Images[i],
+            m_SurfaceFormat.format, VK_IMAGE_ASPECT_COLOR_BIT, 1);
+    }
+
+    if (m_OldSwapchain)
+    {
+        vkDestroySwapchainKHR(m_Device, m_OldSwapchain, nullptr);
     }
 
     //We now have a set of images that can be drawn onto and can be presented to the window
@@ -128,18 +170,20 @@ void SwapChain::Rebuild(uint32_t preferredDimensions[2])
 
 void SwapChain::Destroy()
 {
-    for (auto imageView : m_ImageViews)
+    for (uint32_t i = 0; i < m_ImageViews.size(); ++i)
     {
+        VkImageView imageView = m_ImageViews[i];
         vkDestroyImageView(m_Device, imageView, nullptr);
     }
 
-    m_ImageViews.clear();
+    //m_ImageViews.clear();
+    m_ImageViews.resize(0);
 
-    if (m_Swapchain)
+    if (m_SwapChain)
     {
-        vkDestroySwapchainKHR(m_Device, m_Swapchain, nullptr);
+        vkDestroySwapchainKHR(m_Device, m_SwapChain, nullptr);
     }
-    m_Swapchain = nullptr;
+    m_SwapChain = nullptr;
 }
 
 SwapChain::SwapChain()
@@ -159,7 +203,7 @@ SwapChainBuffer SwapChain::GetSwapChainBuffer(uint32_t imageIndex) const
 
 VkResult SwapChain::AcquireNextImage(VkSemaphore presentCompleteSemaphore, uint32_t* imageIndex)
 {
-    return vkAcquireNextImageKHR(m_Device, m_Swapchain, UINT64_MAX, presentCompleteSemaphore, VK_NULL_HANDLE, imageIndex);
+    return vkAcquireNextImageKHR(m_Device, m_SwapChain, UINT64_MAX, presentCompleteSemaphore, VK_NULL_HANDLE, imageIndex);
 }
 
 VkResult SwapChain::QueuePresent(VkQueue queue, uint32_t imageIndex, VkSemaphore waitSemaphore)
@@ -181,7 +225,7 @@ VkResult SwapChain::QueuePresent(VkQueue queue, uint32_t imageIndex, VkSemaphore
     presentInfo.swapchainCount = 1;
     // The next two parameters specify the swap chains to present images to
     // and the index of the image for each swap chain.
-    presentInfo.pSwapchains = &m_Swapchain;
+    presentInfo.pSwapchains = &m_SwapChain;
     presentInfo.pImageIndices = &imageIndex;
     // There is one last optional parameter called pResults.
     // It allows you to specify an array of VkResult values
@@ -192,143 +236,6 @@ VkResult SwapChain::QueuePresent(VkQueue queue, uint32_t imageIndex, VkSemaphore
 
     // The vkQueuePresentKHR function submits the request to present an image to the swap chain.
     return vkQueuePresentKHR(queue, &presentInfo);
-}
-
-//////////////////////////////////////////////////////////////////////////
-// SwapchainSupportDetails
-/// 
-
-SwapchainSupportDetails::SwapchainSupportDetails(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface)
-{
-    m_Details = QuerySwapChainSupport(physicalDevice, surface);
-}
-
-VkSurfaceFormatKHR SwapchainSupportDetails::GetOptimalSurfaceFormat() const
-{
-    return ChooseSwapSurfaceFormat(m_Details.surfaceFormats);
-}
-
-VkPresentModeKHR SwapchainSupportDetails::GetOptimalPresentMode() const
-{
-    return ChooseSwapPresentMode(m_Details.presentModes);
-}
-
-VkExtent2D SwapchainSupportDetails::GetOptimalExtent(uint32_t preferredDimensions[2]) const
-{
-    return ChooseSwapExtent(m_Details.capabilities, preferredDimensions);
-}
-
-SwapChainDetails SwapchainSupportDetails::QuerySwapChainSupport(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface)
-{
-    SwapChainDetails details;
-
-    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &details.capabilities);
-
-    uint32_t formatCount;
-    vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &formatCount, nullptr);
-
-    if (formatCount != 0)
-    {
-        details.surfaceFormats.resize(formatCount);
-        vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &formatCount, details.surfaceFormats.data());
-    }
-
-    uint32_t presentModeCount;
-    vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &presentModeCount, nullptr);
-
-    if (presentModeCount != 0)
-    {
-        details.presentModes.resize(presentModeCount);
-        vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &presentModeCount, details.presentModes.data());
-    }
-
-    return details;
-}
-
-uint32_t SwapchainSupportDetails::GetOptimalImageCount() const
-{
-    const VkSurfaceCapabilitiesKHR& capabilities = m_Details.capabilities;
-
-    // Simply sticking to this minimum means that we may sometimes have to wait on
-    // the driver to complete internal operations before we can acquire another image to render to.
-    // Therefore it is recommended to request at least one more image than the minimum
-    uint32_t imageCount = capabilities.minImageCount + 1;
-
-    // We should also make sure to not exceed the maximum number of images while doing this,
-    // where 0 is a special value that means that there is no maximum
-    if (capabilities.maxImageCount > 0 && imageCount > capabilities.maxImageCount)
-    {
-        imageCount = capabilities.maxImageCount;
-    }
-
-    return imageCount;
-}
-
-VkSurfaceFormatKHR SwapchainSupportDetails::ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats)
-{
-    for (auto format : availableFormats)
-    {
-        if (format.format == VK_FORMAT_B8G8R8A8_SRGB/*VK_FORMAT_B8G8R8A8_UNORM*/ &&
-            format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
-        {
-            return format;
-        }
-    }
-    return availableFormats[0];
-}
-
-VkPresentModeKHR SwapchainSupportDetails::ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes)
-{
-    // VK_PRESENT_MODE_MAILBOX_KHR is a very nice trade-off if energy usage is not
-    // a concern. It allows us to avoid tearing while still maintaining a fairly
-    // low latency by rendering new images that are as up-to-date as possible
-    // right until the vertical blank.
-    for (const auto& availablePresentMode : availablePresentModes)
-    {
-        if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR)
-        {
-            return availablePresentMode;
-        }
-    }
-
-    return VK_PRESENT_MODE_FIFO_KHR;
-}
-
-VkExtent2D SwapchainSupportDetails::ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities, uint32_t preferredDimensions[2])
-{
-    if (capabilities.currentExtent.width != UINT32_MAX)
-    {
-        return capabilities.currentExtent;
-    }
-
-    auto width = std::max(std::min(preferredDimensions[0], capabilities.maxImageExtent.width),
-        capabilities.minImageExtent.width);
-
-    auto height = std::max(std::min(preferredDimensions[1], capabilities.maxImageExtent.height),
-        capabilities.minImageExtent.height);
-
-    return VkExtent2D{ width, height };
-
-    //if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max())
-    //{
-    //    return capabilities.currentExtent;
-    //}
-    //else
-    //{
-    //    // Get the resolution of the surface in pixels
-    //    int width, height;
-    //    glfwGetFramebufferSize(m_Window, &width, &height);
-
-    //    VkExtent2D actualExtent =
-    //    {
-    //        static_cast<uint32_t>(width),
-    //        static_cast<uint32_t>(height)
-    //    };
-
-    //    actualExtent.width = std::clamp(actualExtent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
-    //    actualExtent.height = std::clamp(actualExtent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
-
-    //    return actualExtent;
 }
 
 vkEND_NAMESPACE

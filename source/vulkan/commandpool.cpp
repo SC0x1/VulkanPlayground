@@ -10,12 +10,18 @@ CommandPool::CommandPool()
 
 void CommandPool::Create(VkDevice device, uint32_t queueFamilyIndex, VkCommandPoolCreateFlags createFlags)
 {
+    m_QueueFamilyIndex = queueFamilyIndex;
+    m_Flags = createFlags;
+
     VkCommandPoolCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     createInfo.queueFamilyIndex = queueFamilyIndex;
-    createInfo.flags = createFlags;
+    createInfo.flags = m_Flags;
 
-    VK_CHECK(vkCreateCommandPool(device, &createInfo, nullptr, &m_VkCommandPool));
+    VkResult result;
+    result = vkCreateCommandPool(device, &createInfo, nullptr, &m_VkCommandPool);
+    VK_CHECK(result);
+    m_IsCreated = result == VK_SUCCESS;
 }
 
 void CommandPool::Destroy(VkDevice device)
@@ -23,6 +29,7 @@ void CommandPool::Destroy(VkDevice device)
     if (m_VkCommandPool)
     {
         vkDestroyCommandPool(device, m_VkCommandPool, nullptr);
+        m_IsCreated = false;
     }
 }
 
