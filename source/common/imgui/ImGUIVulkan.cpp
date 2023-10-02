@@ -1409,7 +1409,6 @@ namespace ImGuiInternal
 
         //////////////////////////////////////////////////////////////////////////
         // Recreate Swapchain
-        VkSwapchainKHR old_swapchain = wd->m_pSwapchain->GetVkSwapChain();
         VkResult result;
         result = vkDeviceWaitIdle(device);
         VK_CHECK(result);
@@ -1485,6 +1484,15 @@ namespace ImGuiInternal
             .colorSpace = requestSurfaceColorSpace,
         };
 
+        //int width = 0, height = 0;
+        //while (width == 0 || height == 0)
+        //{
+        //    GLFWwindow* window = (GLFWwindow*)viewport->PlatformHandle;
+        //    // Window minimization a special case
+        //    glfwGetFramebufferSize(window, &width, &height);
+        //    glfwWaitEvents();
+        //}
+
         wd->m_Width = static_cast<uint32_t>(viewport->Size.x);
         wd->m_Height = static_cast<uint32_t>(viewport->Size.y);
 
@@ -1505,18 +1513,20 @@ namespace ImGuiInternal
 
     static void Renderer_SetWindowSize(ImGuiViewport* viewport, ImVec2 size)
     {
-        auto* app = (VulkanBaseApp*)ImGui::GetIO().BackendRendererUserData;
-        assert(app);
-        /*
-        ImGui_ImplVulkanH_CreateWindowSwapChain
-        //ImGui_ImplVulkan_CreatePipeline
-        ImGui_ImplVulkanH_CreateWindowCommandBuffers
-        */
+         //int width = 0, height = 0;
+         //while (width == 0 || height == 0)
+         //{
+         //    GLFWwindow* window = (GLFWwindow*)viewport->PlatformHandle;
+         //    // Window minimization a special case
+         //    glfwGetFramebufferSize(window, &width, &height);
+         //    glfwWaitEvents();
+         //}
+
         VulkanViewportData* vd = (VulkanViewportData*)viewport->RendererUserData;
         VulkanWindow* wd = &vd->Window;
         CreateOrResizeWindow(wd,
-            static_cast<uint32_t>(viewport->Size.x),
-            static_cast<uint32_t>(viewport->Size.y));
+            static_cast<uint32_t>(size.x),
+            static_cast<uint32_t>(size.y));
     }
 
     std::optional<uint32_t> AcquireNextImage(Vk::SyncObject syncObject, ImGuiViewport* viewport)
@@ -1573,8 +1583,8 @@ namespace ImGuiInternal
         VulkanWindow* wd = &vd->Window;
 
         ImDrawData* imDrawData = viewport->DrawData;
-        float fb_width = (imDrawData->DisplaySize.x * imDrawData->FramebufferScale.x);
-        float fb_height = (imDrawData->DisplaySize.y * imDrawData->FramebufferScale.y);
+        const float fb_width = (imDrawData->DisplaySize.x * imDrawData->FramebufferScale.x);
+        const float fb_height = (imDrawData->DisplaySize.y * imDrawData->FramebufferScale.y);
         if (fb_width <= 0 || fb_height <= 0)
         {
             return;
@@ -1610,8 +1620,8 @@ namespace ImGuiInternal
             info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
             info.renderPass = wd->m_RenderPass;
             info.framebuffer = wd->m_Framebuffers[imageIndex];
-            info.renderArea.extent.width = wd->m_Width;
-            info.renderArea.extent.height = wd->m_Height;
+            info.renderArea.extent.width = (uint32_t)fb_width;
+            info.renderArea.extent.height = (uint32_t)fb_height;
             info.clearValueCount = (viewport->Flags & ImGuiViewportFlags_NoRendererClear) ? 0 : 1;
             info.pClearValues = (viewport->Flags & ImGuiViewportFlags_NoRendererClear) ? nullptr : &wd->m_ClearValue;
             vkCmdBeginRenderPass(cmdBuffer, &info, VK_SUBPASS_CONTENTS_INLINE);
