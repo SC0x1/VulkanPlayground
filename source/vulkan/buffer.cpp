@@ -119,10 +119,13 @@ void Buffer::Destroy()
     if (m_Buffer)
     {
         vkDestroyBuffer(m_Device, m_Buffer, nullptr);
+        m_Buffer = VK_NULL_HANDLE;
     }
+
     if (m_Memory)
     {
         vkFreeMemory(m_Device, m_Memory, nullptr);
+        m_Memory = VK_NULL_HANDLE;
     }
 }
 

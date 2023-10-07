@@ -23,22 +23,6 @@
 
 namespace ImGuiInternal
 {
-    //struct VulkanFrame
-    //{
-    //    VkCommandPool CommandPool{};
-    //    VkCommandBuffer CommandBuffer{};
-    //    VkFence Fence{};
-    //    //VkImage Backbuffer;         // already in Vk::SwapChain
-    //    //VkImageView BackbufferView; // already in Vk::SwapChain
-    //    //VkFramebuffer Framebuffer;
-    //};
-
-    //struct VulkanFrameSemaphores
-    //{
-    //    VkSemaphore ImageAcquiredSemaphore{};
-    //    VkSemaphore RenderCompleteSemaphore{};
-    //};
-
     // Helper structure to hold the data needed by one rendering context into one OS window
     // (Used by example's main.cpp. Used by multi-viewport features. Probably NOT used by your own engine/app.)
     struct VulkanWindow
@@ -76,7 +60,7 @@ namespace ImGuiInternal
         //VkPresentModeKHR PresentMode;     // already in Vk::SwapChain
         
         VkRenderPass m_RenderPass{};
-        VkPipeline m_Pipeline{};               // The window pipeline may uses a different VkRenderPass than the one passed in ImGui_ImplVulkan_InitInfo
+        VkPipeline m_Pipeline{};            // The window pipeline may uses a different VkRenderPass than the one passed in ImGui_ImplVulkan_InitInfo
 
         VkClearValue m_ClearValue{};
 
@@ -87,30 +71,6 @@ namespace ImGuiInternal
 
         bool m_ClearEnable{};
     };
-
-    //////////////////////////////////////////////////////////////////////////
-
-    //struct VulkanFrameRenderBuffers
-    //{
-    //    Vk::Buffer m_VertexBuffer;
-    //    Vk::Buffer m_IndexBuf{}fer;
-
-    //    VkDeviceMemory VertexBufferMemory{};
-    //    VkDeviceMemory IndexBufferMemory{};
-    //    VkDeviceSize VertexBufferSize{};
-    //    VkDeviceSize IndexBufferSize{};
-    //    VkBuffer VertexBuffer{};
-    //    VkBuffer IndexBuffer{};
-    //};
-
-    //// Each viewport will hold 1 ImGui_ImplVulkanH_WindowRenderBuffers
-    //// [Please zero-clear before use!]
-    //struct VulkanWindowRenderBuffers
-    //{
-    //    uint32_t Index;
-    //    uint32_t Count;
-    //    VulkanFrameRenderBuffers* FrameRenderBuffers;
-    //};
 
     // For multi-viewport support:
     // Helper structure we store in the void* RendererUserData field of each ImGuiViewport to easily retrieve our backend data.
@@ -413,7 +373,9 @@ void ImGuiRenderer::OnRecreateSwapchain()
         vkDestroyFramebuffer(m_App->GetVkDevice(), framebuffer, nullptr);
     }
 
-    vkFreeCommandBuffers(device, m_CommandPool.GetVkCommandPool(), static_cast<uint32_t>(m_CommandBuffers.size()), m_CommandBuffers.data());
+    vkFreeCommandBuffers(device, m_CommandPool.GetVkCommandPool(),
+        static_cast<uint32_t>(m_CommandBuffers.size()), m_CommandBuffers.data());
+
     DestroyCommandPool();
 
     vkDestroyRenderPass(device, m_RenderPassMain, nullptr);
@@ -1020,8 +982,11 @@ void ImGuiRenderer::UpdateBuffers(ImDrawData* imDrawData, Vk::Buffer& vertexBuff
 
     // Update buffers only if vertex or index count has been changed compared to current buffer size
 
+    size_t vertex_size = imDrawData->TotalVtxCount * sizeof(ImDrawVert);
+    size_t index_size = imDrawData->TotalIdxCount * sizeof(ImDrawIdx);
+
     // Vertex buffer
-    if ((vertexBuffer.m_Buffer == VK_NULL_HANDLE) || (vertexCount != imDrawData->TotalVtxCount))
+    if ((vertexBuffer.m_Buffer == VK_NULL_HANDLE) || (vertexCount < (uint32_t)imDrawData->TotalVtxCount))
     {
         vertexBuffer.m_Device = device;
 
@@ -1473,7 +1438,6 @@ namespace ImGuiInternal
         // Select Surface Format
         const VkFormat requestSurfaceImageFormat[] = { VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_B8G8R8_UNORM, VK_FORMAT_R8G8B8_UNORM };
         const VkColorSpaceKHR requestSurfaceColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
-        //wd->SurfaceFormat = ImGui_ImplVulkanH_SelectSurfaceFormat(v->PhysicalDevice, wd->Surface, requestSurfaceImageFormat, (size_t)IM_ARRAYSIZE(requestSurfaceImageFormat), requestSurfaceColorSpace);
 
         const VkSurfaceKHR surface = wd->m_Surface;
         uint32_t windowSize[2] = { static_cast<uint32_t>(viewport->Size.x), static_cast<uint32_t>(viewport->Size.y) };
@@ -1507,8 +1471,43 @@ namespace ImGuiInternal
 
     static void Renderer_DestroyWindow(ImGuiViewport* viewport)
     {
-        auto* app = (VulkanBaseApp*)ImGui::GetIO().BackendRendererUserData;
-        assert(app);
+        const VkDevice device = ImGuiInternal::device;
+        vkDeviceWaitIdle(device);
+
+        VulkanViewportData* vd = (VulkanViewportData*)viewport->RendererUserData;
+        if (vd)
+        {
+            vd->m_VertexBuffer.Destroy();
+            vd->m_IndexBuffer.Destroy();
+
+            VulkanWindow* wd = &vd->Window;
+
+            vkFreeCommandBuffers(device, wd->m_CommandPool.GetVkCommandPool(),
+                static_cast<uint32_t>(wd->m_CommandBuffers.size()), wd->m_CommandBuffers.data());
+
+            wd->m_CommandPool.Destroy(device);
+
+            wd->m_pFramesInFlight->Destroy();
+            wd->m_pFramesInFlight.reset(0);
+
+            wd->m_pSwapchain->Destroy();
+            wd->m_pSwapchain.reset(0);
+
+            vkDestroySurfaceKHR(instance, wd->m_Surface, nullptr);
+
+            if (wd->m_RenderPass)
+            {
+                vkDestroyRenderPass(device, wd->m_RenderPass, nullptr);
+            }
+
+            for (auto frameBuffer : wd->m_Framebuffers)
+            {
+                vkDestroyFramebuffer(device, frameBuffer, nullptr);
+            }
+
+            IM_DELETE(vd);
+            viewport->RendererUserData = nullptr;
+        }
     }
 
     static void Renderer_SetWindowSize(ImGuiViewport* viewport, ImVec2 size)
@@ -1629,7 +1628,6 @@ namespace ImGuiInternal
 
         //////////////////////////////////////////////////////////////////////////
         // RenderDrawData - START
-        //ImGui_ImplVulkan_RenderDrawData(viewport->DrawData, fd->CommandBuffer, wd->Pipeline);
         // UpdateBuffers
         ImGuiRenderer::UpdateBuffers(viewport->DrawData, vd->m_VertexBuffer, vd->m_VertexCount,
             vd->m_IndexBuffer, vd->m_IndexCount);
@@ -1784,7 +1782,6 @@ namespace ImGuiInternal
         const VkDevice device = app->GetVkDevice();
         const VkQueue presentQueue = app->GetPresentQueue();
 
-        //ImGui_ImplVulkan_Data* bd = ImGui_ImplVulkan_GetBackendData();
         VulkanViewportData* vd = (VulkanViewportData*)viewport->RendererUserData;
         VulkanWindow* wd = &vd->Window;
 
