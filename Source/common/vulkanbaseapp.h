@@ -53,13 +53,13 @@ public:
     VkPhysicalDevice GetVkPhysicalDevice() const;
     VkDevice GetVkDevice() const;
     Vk::QueueFamilyIndices GetQueueFamilyIndices() const;
-    VkQueue GetGraphicsQueue() const;
+    VkQueue GetVkGraphicsQueue() const;
     VkQueue GetPresentQueue() const;
 
     uint32_t GetSwapChainImageCount() const;
-    VkRenderPass GetRenderPass() const;
+    VkRenderPass GetVkRenderPass() const;
     VkCommandPool GetCommandPool() const;
-    VkFormat GetSwapchainImageFormat() const;
+    VkFormat GetVkSwapchainImageFormat() const;
 
     VkSwapchainKHR GetVkSwapChain() const;
     VkExtent2D GetSwapChainExtend() const;
@@ -135,7 +135,7 @@ protected:
     Vk::Surface m_Surface;
 
     // Swap chain
-    Vk::SwapChain m_Swapchain;
+    Vk::SwapChain m_SwapChain;
     std::vector<VkFramebuffer> m_SwapChainFramebuffers;
 
     VkRenderPass m_RenderPass;
@@ -208,17 +208,17 @@ inline VkQueue VulkanBaseApp::GetPresentQueue() const
     return m_PresentQueue;
 }
 
-inline VkQueue VulkanBaseApp::GetGraphicsQueue() const
+inline VkQueue VulkanBaseApp::GetVkGraphicsQueue() const
 {
     return m_GraphicsQueue;
 }
 
 inline uint32_t VulkanBaseApp::GetSwapChainImageCount() const
 {
-    return (uint32_t)m_Swapchain.GetImages().size();
+    return (uint32_t)m_SwapChain.GetImages().size();
 }
 
-inline VkRenderPass VulkanBaseApp::GetRenderPass() const
+inline VkRenderPass VulkanBaseApp::GetVkRenderPass() const
 {
     return m_RenderPass;
 }
@@ -228,29 +228,29 @@ inline VkCommandPool VulkanBaseApp::GetCommandPool() const
     return m_CommandPool;
 }
 
-inline VkFormat VulkanBaseApp::GetSwapchainImageFormat() const
+inline VkFormat VulkanBaseApp::GetVkSwapchainImageFormat() const
 {
-    return m_Swapchain.GetSurfaceFormat().format;
+    return m_SwapChain.GetSurfaceFormat().format;
 }
 
 inline VkSwapchainKHR VulkanBaseApp::GetVkSwapChain() const
 {
-    return m_Swapchain.GetVkSwapChain();
+    return m_SwapChain.GetVkSwapChain();
 }
 
 inline VkExtent2D VulkanBaseApp::GetSwapChainExtend() const
 {
-    return m_Swapchain.GetExtent();
+    return m_SwapChain.GetExtent();
 }
 
 inline const std::vector<VkImage>& VulkanBaseApp::GetSwapChainImages() const
 {
-    return m_Swapchain.GetImages();
+    return m_SwapChain.GetImages();
 }
 
 inline const std::vector<VkImageView>& VulkanBaseApp::GetSwapChainImageViews() const
 {
-    return m_Swapchain.GetImageViews();
+    return m_SwapChain.GetVkImageViews();
 }
 
 inline uint32_t VulkanBaseApp::GetMaxFramesInFlight() const

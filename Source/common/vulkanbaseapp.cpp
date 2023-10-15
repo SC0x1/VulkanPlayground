@@ -97,8 +97,8 @@ void VulkanBaseApp::OnInitialize()
     int width, height;
     glfwGetWindowSize(m_Window, &width, &height);
     uint32_t windowSize[2] = { static_cast<uint32_t>(width), static_cast<uint32_t>(height) };
-    m_Swapchain.Create(m_Device, m_PhysicalDevice, m_Surface.GetVkSurface(), windowSize);
-    m_MaxFramesInFlight = m_Swapchain.GetImageCount();
+    m_SwapChain.Create(m_Device, m_PhysicalDevice, m_Surface.GetVkSurface(), windowSize);
+    m_MaxFramesInFlight = m_SwapChain.GetImageCount();
 
     CreateRenderPass();
 
@@ -261,7 +261,7 @@ void VulkanBaseApp::PresentFrame(Vk::SyncObject syncObject, uint32_t frameIndex,
     // The last step of drawing a frame is submitting the result back to the swap chain
     // to have it eventually show up on the screen.
     VkResult result;
-    result = m_Swapchain.QueuePresent(m_PresentQueue, imageIndex, syncObject.renderFinishedSemaphore);
+    result = m_SwapChain.QueuePresent(m_PresentQueue, imageIndex, syncObject.renderFinishedSemaphore);
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || m_IsFramebufferResized)
     {
@@ -279,7 +279,7 @@ std::optional<uint32_t> VulkanBaseApp::AcquireNextImage(Vk::SyncObject syncObjec
     vkWaitForFences(m_Device, 1, &syncObject.fence, VK_TRUE, UINT64_MAX);
 
     uint32_t frameBufferImageIndex;
-    const VkResult result = m_Swapchain.AcquireNextImage(syncObject.imageAvailableSemaphore, &frameBufferImageIndex);
+    const VkResult result = m_SwapChain.AcquireNextImage(syncObject.imageAvailableSemaphore, &frameBufferImageIndex);
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR)
     {
@@ -499,7 +499,7 @@ void VulkanBaseApp::OnRecreateSwapchain()
 
     uint32_t windowSize[2] = { static_cast<uint32_t>(width), static_cast<uint32_t>(height) };
    
-    m_Swapchain.Rebuild(windowSize);
+    m_SwapChain.Rebuild(windowSize);
 
     CreateColorResources();
 
@@ -536,12 +536,12 @@ void VulkanBaseApp::CleanupSwapChain()
         vkDestroyFramebuffer(m_Device, m_SwapChainFramebuffers[i], nullptr);
     }
 
-    m_Swapchain.Destroy();
+    m_SwapChain.Destroy();
 }
 
 void VulkanBaseApp::CreateRenderPass()
 {
-    const VkFormat colorFormat = m_Swapchain.GetSurfaceFormat().format;
+    const VkFormat colorFormat = m_SwapChain.GetSurfaceFormat().format;
 
     VkAttachmentDescription colorAttachment{};
     // The format of the color attachment should match the format of the swapchain images.
@@ -692,9 +692,9 @@ void VulkanBaseApp::CreateFramebuffers()
     // that represent the attachments.
     // That means that we have to create a framebuffer for all of the images in the swap chain and
     // use the one that corresponds to the retrieved image at drawing time.
-    const std::vector<VkImageView>& swapchainImageViews = m_Swapchain.GetImageViews();
+    const std::vector<VkImageView>& swapchainImageViews = m_SwapChain.GetVkImageViews();
     m_SwapChainFramebuffers.resize(swapchainImageViews.size());
-    const VkExtent2D swapchainExtent = m_Swapchain.GetExtent();
+    const VkExtent2D swapchainExtent = m_SwapChain.GetExtent();
 
     for (size_t i = 0; i < swapchainImageViews.size(); i++)
     {
@@ -754,8 +754,8 @@ void VulkanBaseApp::CreateCommandPool()
 
 void VulkanBaseApp::CreateColorResources()
 {
-    const VkExtent2D swapchainExtend = m_Swapchain.GetExtent();
-    const VkFormat colorFormat = m_Swapchain.GetSurfaceFormat().format;
+    const VkExtent2D swapchainExtend = m_SwapChain.GetExtent();
+    const VkFormat colorFormat = m_SwapChain.GetSurfaceFormat().format;
 
     Vk::Utils::CreateImage2D(m_Device, m_PhysicalDevice, swapchainExtend.width, swapchainExtend.height,
         1, m_MsaaSamples, colorFormat,
@@ -767,7 +767,7 @@ void VulkanBaseApp::CreateColorResources()
 
 void VulkanBaseApp::CreateDepthResources()
 {
-    const VkExtent2D swapchainExtend = m_Swapchain.GetExtent();
+    const VkExtent2D swapchainExtend = m_SwapChain.GetExtent();
     const VkFormat depthFormat = FindDepthFormat();
 
     Vk::Utils::CreateImage2D(m_Device, m_PhysicalDevice, swapchainExtend.width, swapchainExtend.height, 1, m_MsaaSamples, depthFormat,

@@ -5,6 +5,7 @@
 #include "vulkan/commandpool.h"
 
 class VulkanBaseApp;
+class ImGuiShadowVulkan;
 
 struct ImGuiDrawData
 {
@@ -35,6 +36,7 @@ class ImGuiRenderer
 
 public:
     ImGuiRenderer();
+    ~ImGuiRenderer();
 
     bool Initialize(VulkanBaseApp* app);
     void Shutdown();
@@ -42,7 +44,7 @@ public:
     void StartFrame();
     void EndFrame(uint32_t frameIndex, uint32_t imageIndex);
 
-    void OnRecreateSwapchain();
+    void OnRecreateSwapchain(const Vk::SwapChain& swapChain);
 
     VkCommandBuffer GetCommandBuffer(uint32_t frameID) const;
 
@@ -79,7 +81,7 @@ public:
     void DrawFrame(ImDrawData* imDrawData, VkCommandBuffer cmdBuffer,
         Vk::Buffer& vertexBuffer, Vk::Buffer& indexBuffer, float width, float height);
 
-    void RenderViewports();
+    //void RenderViewports();
 
     PushConstantsBlock m_PushConstants;
 
@@ -128,12 +130,12 @@ public:
     // UI params are set via push constants
     PushConstantsBlock m_PushConstBlock;
 
+    std::unique_ptr<ImGuiShadowVulkan> m_ShadowBackendImGui;
+
     VulkanBaseApp* m_App = nullptr;
 
     bool m_IsSkippingFrame = false;
     bool m_UseDefaultRenderer = false;
-
-    static ImGuiRenderer* m_This;
 };
 
 inline VkCommandBuffer ImGuiRenderer::GetCommandBuffer(uint32_t frameID) const

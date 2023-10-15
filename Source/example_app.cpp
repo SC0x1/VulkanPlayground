@@ -91,7 +91,7 @@ void VulkanExample::OnRender()
 void VulkanExample::OnRecreateSwapchain()
 {
     VulkanBaseApp::OnRecreateSwapchain();
-    m_ImGuiLayer.OnRecreateSwapchain();
+    m_ImGuiLayer.OnRecreateSwapchain(m_SwapChain);
 }
 
 void VulkanExample::CreateDescriptorSetLayout()
@@ -172,7 +172,7 @@ void VulkanExample::CreateGraphicsPipeline()
     inputAssembly.primitiveRestartEnable = VK_FALSE;
     //////////////////////////////////////////////////////////////////////////
     // Viewports and scissors
-    const VkExtent2D swapchainExtend = m_Swapchain.GetExtent();
+    const VkExtent2D swapchainExtend = m_SwapChain.GetExtent();
     VkViewport viewport{};
     viewport.x = 0.0f;
     viewport.y = 0.0f;
@@ -727,7 +727,7 @@ void VulkanExample::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t 
     // It specifies which state to inherit from the calling primary command buffers
     VK_CHECK(vkBeginCommandBuffer(commandBuffer, &beginInfo));
 
-    const VkExtent2D swapchainExtend = m_Swapchain.GetExtent();
+    const VkExtent2D swapchainExtend = m_SwapChain.GetExtent();
 
     VkRenderPassBeginInfo renderPassInfo{};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -807,7 +807,7 @@ void VulkanExample::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t 
 
 void VulkanExample::UpdateUniformBuffer(uint32_t frameIndex)
 {
-    const VkExtent2D swapchainExtend = m_Swapchain.GetExtent();
+    const VkExtent2D swapchainExtend = m_SwapChain.GetExtent();
 
     static auto startTime = std::chrono::high_resolution_clock::now();
 

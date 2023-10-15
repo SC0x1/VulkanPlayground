@@ -14,6 +14,9 @@
 
 #include "ImGuiShadersSpirV.inl"
 
+#include "common/imgui/shadowimpl/imgui_shadow_impl.h"
+#include "common/imgui/shadowimpl/imgui_shadow_docking_impl.h"
+
 // Embedded font
 #include "common/imgui/Roboto-Regular.embed"
 
@@ -109,22 +112,25 @@ namespace ImGuiInternal
     static VkQueue graphicsQueue = VK_NULL_HANDLE;
     static VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
     static VkDevice device = VK_NULL_HANDLE;
+
+    static bool USE_SHADOW_RENDERER = true;
 };
 
-ImGuiRenderer* ImGuiRenderer::m_This = nullptr;
+#define BEGIN_SkipIF_USE_SHADOW_RENDERER if (ImGuiInternal::USE_SHADOW_RENDERER == false) {
+#define END_SkipIF_USE_SHADOW_RENDERER }
 
 ImGuiRenderer::ImGuiRenderer()
 {
-    m_This = this;
+}
+
+ImGuiRenderer::~ImGuiRenderer()
+{
+    // To prevent an compilation error with forward declaration of
+    // ImGuiShadowVulkan and unique_ptr
 }
 
 bool ImGuiRenderer::Initialize(VulkanBaseApp* app)
 {
-    if (app == nullptr)
-    {
-        return false;
-    }
-
     m_App = app;
 
     void* window = m_App->GetWindowHandle();
@@ -133,6 +139,44 @@ bool ImGuiRenderer::Initialize(VulkanBaseApp* app)
     {
         return false;
     }
+
+    // >> REFACTOR
+    m_ShadowBackendImGui.reset(ImGuiShadowVulkan::Create(false, false));
+    // << REFACTOR
+
+    ImGuiInternal::instance = m_App->GetVkInstance();
+    ImGuiInternal::device = m_App->GetVkDevice();
+    ImGuiInternal::physicalDevice = m_App->GetVkPhysicalDevice();
+    ImGuiInternal::graphicsQueue = m_App->GetVkGraphicsQueue();
+
+    const uint32_t queueFamily = m_App->GetQueueFamilyIndices().graphicsFamily.value();
+    const uint32_t imageCount = m_App->GetSwapChainImageCount();
+    const VkFormat swapchainImageFormat = m_App->GetVkSwapchainImageFormat();
+    const VkRenderPass renderPassApp = m_App->GetVkRenderPass();
+    const VkExtent2D swapChainExtend = m_App->GetSwapChainExtend();
+    const std::vector<VkImageView>& swapChainImageViews = m_App->GetSwapChainImageViews();
+
+    // >> REFACTOR
+    ImGuiVulkanInitInfo initInfo
+    {
+        .instance = ImGuiInternal::instance,
+        .device = ImGuiInternal::device,
+        .physicalDevice = ImGuiInternal::physicalDevice,
+        .graphicsQueue = ImGuiInternal::graphicsQueue,
+        .queueFamily = queueFamily,
+        .swapChainImageCount = imageCount,
+        .swapchainImageFormat = swapchainImageFormat,
+        .renderPass = renderPassApp,
+        .swapChainExtend = swapChainExtend,
+        .swapChainImageViews = swapChainImageViews,
+        .windowHandle = window,
+    };
+
+    m_ShadowBackendImGui->Initialize(initInfo);
+
+    // << REFACTOR
+
+    BEGIN_SkipIF_USE_SHADOW_RENDERER
 
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
@@ -164,17 +208,9 @@ bool ImGuiRenderer::Initialize(VulkanBaseApp* app)
 
     ImGui::StyleColorsDark();
 
-    ImGuiInternal::instance = m_App->GetVkInstance();
-    ImGuiInternal::device = m_App->GetVkDevice();
-    ImGuiInternal::physicalDevice = m_App->GetVkPhysicalDevice();
-    ImGuiInternal::graphicsQueue = m_App->GetGraphicsQueue();
-
-    const uint32_t queueFamily = m_App->GetQueueFamilyIndices().graphicsFamily.value();
-    const uint32_t imageCount = m_App->GetSwapChainImageCount();
-
     CreateDescriptorPool();
 
-    CreateRenderPass(m_RenderPassMain, m_App->GetSwapchainImageFormat(), VK_ATTACHMENT_LOAD_OP_LOAD);
+    CreateRenderPass(m_RenderPassMain, m_App->GetVkSwapchainImageFormat(), VK_ATTACHMENT_LOAD_OP_LOAD);
     CreateRenderPass(m_RenderPassDocking, VK_FORMAT_B8G8R8A8_UNORM, VK_ATTACHMENT_LOAD_OP_CLEAR);
 
     CreateFramebuffers();
@@ -226,11 +262,20 @@ bool ImGuiRenderer::Initialize(VulkanBaseApp* app)
 
     m_VertexBuffer.m_Device = ImGuiInternal::device;
     m_IndexBuffer.m_Device = ImGuiInternal::device;
+
+    END_SkipIF_USE_SHADOW_RENDERER
+
     return true;
 }
 
 void ImGuiRenderer::Shutdown()
 {
+    // >> REFACTOR
+    m_ShadowBackendImGui->Shutdown();
+    // << REFACTOR
+
+    BEGIN_SkipIF_USE_SHADOW_RENDERER
+
     assert(m_App);
 
     const VkDevice device = ImGuiInternal::device;
@@ -293,10 +338,18 @@ void ImGuiRenderer::Shutdown()
     {
         vkDestroyFramebuffer(device, framebuffer, nullptr);
     }
+
+    END_SkipIF_USE_SHADOW_RENDERER
 }
 
 void ImGuiRenderer::StartFrame()
 {
+    // >> REFACTOR
+    m_ShadowBackendImGui->StartFrame();
+    // << REFACTOR
+
+    BEGIN_SkipIF_USE_SHADOW_RENDERER
+
     if (IsSkippingFrame())
     {
         return;
@@ -317,16 +370,104 @@ void ImGuiRenderer::StartFrame()
     // ImGui everywhere.
     ImGui::NewFrame();
 
+    END_SkipIF_USE_SHADOW_RENDERER
+
     // SRS - Set initial position of default Debug window (note: Debug window sets its own initial size, use ImGuiSetCond_Always to override)
     ImGui::SetWindowPos(ImVec2(0, 0), ImGuiCond_FirstUseEver);
     ImGui::SetWindowSize(ImVec2(300, 300), ImGuiCond_Always);
 
     ImGui::ShowDemoWindow();
+    {
+        bool flag = true;
+        //IMGUI_DEMO_MARKER("Examples/Menu");
+        ImGui::MenuItem("(demo menu)", NULL, false, false);
+        if (ImGui::MenuItem("New")) {}
+        if (ImGui::MenuItem("Open", "Ctrl+O")) {}
+        if (ImGui::BeginMenu("Open Recent"))
+        {
+            ImGui::MenuItem("fish_hat.c");
+            ImGui::MenuItem("fish_hat.inl");
+            ImGui::MenuItem("fish_hat.h");
+            if (ImGui::BeginMenu("More.."))
+            {
+                ImGui::MenuItem("Hello");
+                ImGui::MenuItem("Sailor");
+                if (ImGui::BeginMenu("Recurse.."))
+                {
+                    //ShowExampleMenuFile();
+                    ImGui::EndMenu();
+                }
+                ImGui::EndMenu();
+            }
+            ImGui::EndMenu();
+        }
+        if (ImGui::MenuItem("Save", "Ctrl+S")) {}
+        if (ImGui::MenuItem("Save As..")) {}
+
+        ImGui::Separator();
+        //IMGUI_DEMO_MARKER("Examples/Menu/Options");
+        if (ImGui::BeginMenu("Options"))
+        {
+            static bool enabled = true;
+            ImGui::MenuItem("Enabled", "", &enabled);
+            ImGui::BeginChild("child", ImVec2(0, 60), true);
+            for (int i = 0; i < 10; i++)
+                ImGui::Text("Scrolling Text %d", i);
+            ImGui::EndChild();
+            static float f = 0.5f;
+            static int n = 0;
+            ImGui::SliderFloat("Value", &f, 0.0f, 1.0f);
+            ImGui::InputFloat("Input", &f, 0.1f);
+            ImGui::Combo("Combo", &n, "Yes\0No\0Maybe\0\0");
+            ImGui::EndMenu();
+        }
+
+        //IMGUI_DEMO_MARKER("Examples/Menu/Colors");
+        if (ImGui::BeginMenu("Colors"))
+        {
+            float sz = ImGui::GetTextLineHeight();
+            for (int i = 0; i < ImGuiCol_COUNT; i++)
+            {
+                const char* name = ImGui::GetStyleColorName((ImGuiCol)i);
+                ImVec2 p = ImGui::GetCursorScreenPos();
+                ImGui::GetWindowDrawList()->AddRectFilled(p, ImVec2(p.x + sz, p.y + sz), ImGui::GetColorU32((ImGuiCol)i));
+                ImGui::Dummy(ImVec2(sz, sz));
+                ImGui::SameLine();
+                ImGui::MenuItem(name);
+            }
+            ImGui::EndMenu();
+        }
+
+        // Here we demonstrate appending again to the "Options" menu (which we already created above)
+        // Of course in this demo it is a little bit silly that this function calls BeginMenu("Options") twice.
+        // In a real code-base using it would make senses to use this feature from very different code locations.
+        if (ImGui::BeginMenu("Options")) // <-- Append!
+        {
+            //IMGUI_DEMO_MARKER("Examples/Menu/Append to an existing menu");
+            static bool b = true;
+            ImGui::Checkbox("SomeOption", &b);
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::BeginMenu("Disabled", false)) // Disabled
+        {
+            IM_ASSERT(0);
+        }
+        if (ImGui::MenuItem("Checked", NULL, true)) {}
+        ImGui::Separator();
+        if (ImGui::MenuItem("Quit", "Alt+F4")) {}
+    }
     //ImGuizmo::BeginFrame(); // TODO: ImGuizmo
 }
 
 void ImGuiRenderer::EndFrame(uint32_t frameIndex, uint32_t imageIndex)
 {
+    // >> REFACTOR
+    m_ShadowBackendImGui->EndFrame(frameIndex, imageIndex);
+    // << REFACTOR
+
+    BEGIN_SkipIF_USE_SHADOW_RENDERER
+
     // You want to try calling EndFrame/Render as late as you can.
     ImGui::EndFrame();
     // Render to generate draw buffers
@@ -359,11 +500,17 @@ void ImGuiRenderer::EndFrame(uint32_t frameIndex, uint32_t imageIndex)
     }
 
 #endif // VP_IMGUI_VIEWPORTS_ENABLED
+
+    END_SkipIF_USE_SHADOW_RENDERER
 }
 
-void ImGuiRenderer::OnRecreateSwapchain()
+void ImGuiRenderer::OnRecreateSwapchain(const Vk::SwapChain& swapChain)
 {
     assert(m_App);
+
+    m_ShadowBackendImGui->OnRecreateSwapchain(swapChain);
+
+    BEGIN_SkipIF_USE_SHADOW_RENDERER
 
     const VkDevice device = ImGuiInternal::device;
     const uint32_t imageCount = m_App->GetSwapChainImageCount();
@@ -380,7 +527,7 @@ void ImGuiRenderer::OnRecreateSwapchain()
 
     vkDestroyRenderPass(device, m_RenderPassMain, nullptr);
 
-    CreateRenderPass(m_RenderPassMain, m_App->GetSwapchainImageFormat(), VK_ATTACHMENT_LOAD_OP_LOAD);
+    CreateRenderPass(m_RenderPassMain, m_App->GetVkSwapchainImageFormat(), VK_ATTACHMENT_LOAD_OP_LOAD);
 
     if (m_UseDefaultRenderer)
     {
@@ -390,6 +537,8 @@ void ImGuiRenderer::OnRecreateSwapchain()
     CreateCommandPool();
     CreateCommandBuffers();
     CreateFramebuffers();
+
+    END_SkipIF_USE_SHADOW_RENDERER
 }
 
 bool ImGuiRenderer::IsSkippingFrame() const
@@ -444,6 +593,8 @@ void ImGuiRenderer::InitializeRendererCallbacks()
 
 void ImGuiRenderer::CreateFontsTexture()
 {
+    BEGIN_SkipIF_USE_SHADOW_RENDERER
+
     assert(m_App);
 
     const VkDevice device = ImGuiInternal::device;
@@ -577,6 +728,8 @@ void ImGuiRenderer::CreateFontsTexture()
     samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
     samplerInfo.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
     VK_CHECK(vkCreateSampler(device, &samplerInfo, nullptr, &m_Sampler));
+
+    END_SkipIF_USE_SHADOW_RENDERER
 }
 
 void ImGuiRenderer::RecordCommandBuffer(VkCommandBuffer cmdBuffer, uint32_t imageIndex, ImDrawData* draw_data)
@@ -626,7 +779,7 @@ void ImGuiRenderer::RecordCommandBuffer(VkCommandBuffer cmdBuffer, uint32_t imag
 void ImGuiRenderer::SubmitCommandBuffer(VkCommandBuffer cmdBuffer)
 {
     const VkDevice device = ImGuiInternal::device;
-    const VkQueue graphicsQueue = m_App->GetGraphicsQueue();
+    const VkQueue graphicsQueue = ImGuiInternal::graphicsQueue;
 
     vkResetFences(device, 1, &m_FenceQueueSync);
 
@@ -1205,47 +1358,47 @@ void ImGuiRenderer::DrawFrame(ImDrawData* imDrawData, VkCommandBuffer cmdBuffer,
     }
 }
 
-void ImGuiRenderer::RenderViewports()
-{
-    ImGuiPlatformIO& platform_io = ImGui::GetPlatformIO();
-    ImGuiIO& io = ImGui::GetIO();
-
-    if (io.BackendFlags & ImGuiBackendFlags_RendererHasViewports)
-    {
-        for (int i = 1; i < platform_io.Viewports.Size; i++)
-        {
-            if ((platform_io.Viewports[i]->Flags & ImGuiViewportFlags_IsMinimized) == 0)
-            {
-                ImGuiViewport* vp = platform_io.Viewports[i];
-                ImDrawData* drawData = vp->DrawData;
-
-                auto* vd = (ImGuiInternal::VulkanViewportData*)vp->RendererUserData;
-                if (vd != nullptr)
-                {
-                    UpdateBuffers(drawData, vd->m_VertexBuffer, vd->m_VertexCount, vd->m_IndexBuffer, vd->m_IndexCount);
-
-                    if (drawData->CmdListsCount > 0)
-                    {
-                        drawData->CmdLists;
-                        VkDeviceSize offsets[1] = { 0 };
-                        //vkCmdBindVertexBuffers(m_CommandBuffers[frameIndex], 0, 1, &vertexBuffer.buffer, offsets);
-                        //vkCmdBindIndexBuffer(m_CommandBuffers[frameIndex], indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT16);
-                    }
-
-                    // MyRenderFunction(platform_io.Viewports[i], my_args);
-                }
-            }
-        }
-
-        for (int i = 1; i < platform_io.Viewports.Size; i++)
-        {
-            if ((platform_io.Viewports[i]->Flags & ImGuiViewportFlags_IsMinimized) == 0)
-            {
-                // MySwapBufferFunction(platform_io.Viewports[i], my_args);
-            }
-        }
-    }
-}
+//void ImGuiRenderer::RenderViewports()
+//{
+//    ImGuiPlatformIO& platform_io = ImGui::GetPlatformIO();
+//    ImGuiIO& io = ImGui::GetIO();
+//
+//    if (io.BackendFlags & ImGuiBackendFlags_RendererHasViewports)
+//    {
+//        for (int i = 1; i < platform_io.Viewports.Size; i++)
+//        {
+//            if ((platform_io.Viewports[i]->Flags & ImGuiViewportFlags_IsMinimized) == 0)
+//            {
+//                ImGuiViewport* vp = platform_io.Viewports[i];
+//                ImDrawData* drawData = vp->DrawData;
+//
+//                auto* vd = (ImGuiInternal::VulkanViewportData*)vp->RendererUserData;
+//                if (vd != nullptr)
+//                {
+//                    UpdateBuffers(drawData, vd->m_VertexBuffer, vd->m_VertexCount, vd->m_IndexBuffer, vd->m_IndexCount);
+//
+//                    if (drawData->CmdListsCount > 0)
+//                    {
+//                        drawData->CmdLists;
+//                        VkDeviceSize offsets[1] = { 0 };
+//                        //vkCmdBindVertexBuffers(m_CommandBuffers[frameIndex], 0, 1, &vertexBuffer.buffer, offsets);
+//                        //vkCmdBindIndexBuffer(m_CommandBuffers[frameIndex], indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT16);
+//                    }
+//
+//                    // MyRenderFunction(platform_io.Viewports[i], my_args);
+//                }
+//            }
+//        }
+//
+//        for (int i = 1; i < platform_io.Viewports.Size; i++)
+//        {
+//            if ((platform_io.Viewports[i]->Flags & ImGuiViewportFlags_IsMinimized) == 0)
+//            {
+//                // MySwapBufferFunction(platform_io.Viewports[i], my_args);
+//            }
+//        }
+//    }
+//}
 
 namespace ImGuiInternal
 {

@@ -51,7 +51,7 @@ public:
     SwapChainBuffer GetSwapChainBuffer(uint32_t imageIndex) const;
 
     const std::vector<VkImage>& GetImages() const;
-    const std::vector<VkImageView>& GetImageViews() const;
+    const std::vector<VkImageView>& GetVkImageViews() const;
 
 private:
 
@@ -113,7 +113,7 @@ inline const std::vector<VkImage>& SwapChain::GetImages() const
     return m_Images;
 }
 
-inline const std::vector<VkImageView>& SwapChain::GetImageViews() const
+inline const std::vector<VkImageView>& SwapChain::GetVkImageViews() const
 {
     return m_ImageViews;
 }

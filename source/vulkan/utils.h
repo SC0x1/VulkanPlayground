@@ -126,6 +126,9 @@ namespace Utils
     VkCommandBuffer BeginSingleTimeCommands(VulkanRenderDevice& vkDev);
     void EndSingleTimeCommands(VulkanRenderDevice& vkDev, VkCommandBuffer commandBuffer);
 
+    VkCommandBuffer BeginSingleTimeCommands(VkDevice device, VkCommandPool commandPool);
+    void EndSingleTimeCommands(VkDevice device, VkQueue queue, VkCommandPool commandPool, VkCommandBuffer commandBuffer);
+
     // Put an image memory barrier for setting an image layout on the sub resource into the given command buffer
     void SetImageLayout(
         VkCommandBuffer cmdbuffer,

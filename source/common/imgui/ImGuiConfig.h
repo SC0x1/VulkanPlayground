@@ -2,13 +2,8 @@
 
 #define IMGUI_INCLUDE_IMCONFIG_H
 
-#if defined IMGUI_HAS_VIEWPORT
-    #define VP_IMGUI_VIEWPORTS_ENABLED
-#endif // IMGUI_HAS_VIEWPORT
-
-#if defined IMGUI_HAS_DOCK
-    #define VP_IMGUI_DOCKING_ENABLED
-#endif // IMGUI_HAS_DOCK
+#define VP_IMGUI_VIEWPORTS_ENABLED 0
+#define VP_IMGUI_DOCKING_ENABLED 0
 
 // define pool size for pools
 enum ImGuiPoolSize : uint32_t
