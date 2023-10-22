@@ -14,8 +14,8 @@
 
 #include "ImGuiShadersSpirV.inl"
 
-#include "common/imgui/shadowimpl/imgui_shadow_impl.h"
-#include "common/imgui/shadowimpl/imgui_shadow_docking_impl.h"
+#include "common/imgui/shadowimpl/custom_impl.h"
+#include "common/imgui/shadowimpl/custom_docking_impl.h"
 
 // Embedded font
 #include "common/imgui/Roboto-Regular.embed"
@@ -110,13 +110,19 @@ namespace ImGuiInternal
 
     static VkInstance instance = VK_NULL_HANDLE;
     static VkQueue graphicsQueue = VK_NULL_HANDLE;
+    static VkQueue presentQueue = VK_NULL_HANDLE;
     static VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
     static VkDevice device = VK_NULL_HANDLE;
+
+    static uint32_t queueFamilyIdx = 0;
+    static uint32_t swapChainImageCount = 0;
 
     static bool USE_SHADOW_RENDERER = true;
 };
 
-#define BEGIN_SkipIF_USE_SHADOW_RENDERER if (ImGuiInternal::USE_SHADOW_RENDERER == false) {
+#define ENABLE_SHADOW_RENDERER(X) if (ImGuiInternal::USE_SHADOW_RENDERER == true) { X }
+
+#define BEGIN_Skip_IF_USE_SHADOW_RENDERER if (ImGuiInternal::USE_SHADOW_RENDERER == false) {
 #define END_SkipIF_USE_SHADOW_RENDERER }
 
 ImGuiRenderer::ImGuiRenderer()
@@ -141,16 +147,19 @@ bool ImGuiRenderer::Initialize(VulkanBaseApp* app)
     }
 
     // >> REFACTOR
-    m_ShadowBackendImGui.reset(ImGuiShadowVulkan::Create(false, false));
+    ENABLE_SHADOW_RENDERER(
+        m_ShadowBackendImGui.reset(ImGuiShadowVulkan::Create(true, true));
+    )
     // << REFACTOR
 
     ImGuiInternal::instance = m_App->GetVkInstance();
     ImGuiInternal::device = m_App->GetVkDevice();
     ImGuiInternal::physicalDevice = m_App->GetVkPhysicalDevice();
     ImGuiInternal::graphicsQueue = m_App->GetVkGraphicsQueue();
+    ImGuiInternal::presentQueue = m_App->GetVkPresentQueue();
 
-    const uint32_t queueFamily = m_App->GetQueueFamilyIndices().graphicsFamily.value();
-    const uint32_t imageCount = m_App->GetSwapChainImageCount();
+    ImGuiInternal::queueFamilyIdx = m_App->GetQueueFamilyIndices().graphicsFamily.value();
+    ImGuiInternal::swapChainImageCount = m_App->GetSwapChainImageCount();
     const VkFormat swapchainImageFormat = m_App->GetVkSwapchainImageFormat();
     const VkRenderPass renderPassApp = m_App->GetVkRenderPass();
     const VkExtent2D swapChainExtend = m_App->GetSwapChainExtend();
@@ -163,20 +172,23 @@ bool ImGuiRenderer::Initialize(VulkanBaseApp* app)
         .device = ImGuiInternal::device,
         .physicalDevice = ImGuiInternal::physicalDevice,
         .graphicsQueue = ImGuiInternal::graphicsQueue,
-        .queueFamily = queueFamily,
-        .swapChainImageCount = imageCount,
+        .queueFamily = ImGuiInternal::queueFamilyIdx,
+        .swapChainImageCount = ImGuiInternal::swapChainImageCount,
         .swapchainImageFormat = swapchainImageFormat,
-        .renderPass = renderPassApp,
+        .renderPassMain = nullptr, // we will create renderPass by Initialization
+        .pipelineCache = nullptr,
+        .descriptorPool = nullptr, // It will be created by initialization ImGuiBackend
         .swapChainExtend = swapChainExtend,
         .swapChainImageViews = swapChainImageViews,
         .windowHandle = window,
     };
 
-    m_ShadowBackendImGui->Initialize(initInfo);
-
+    ENABLE_SHADOW_RENDERER(
+        m_ShadowBackendImGui->Initialize(initInfo);
+    )
     // << REFACTOR
 
-    BEGIN_SkipIF_USE_SHADOW_RENDERER
+    BEGIN_Skip_IF_USE_SHADOW_RENDERER
 
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
@@ -227,14 +239,14 @@ bool ImGuiRenderer::Initialize(VulkanBaseApp* app)
         init_info.Instance = ImGuiInternal::instance;
         init_info.PhysicalDevice = ImGuiInternal::physicalDevice;
         init_info.Device = ImGuiInternal::device;
-        init_info.QueueFamily = queueFamily;
+        init_info.QueueFamily = ImGuiInternal::queueFamilyIdx;
         init_info.Queue = ImGuiInternal::graphicsQueue;
         init_info.PipelineCache = nullptr; // TODO: PipelineCache
         init_info.DescriptorPool = m_DescriptorPool;
         init_info.Subpass = 0;
         init_info.Allocator = nullptr; // TODO: Allocator
-        init_info.MinImageCount = imageCount;
-        init_info.ImageCount = imageCount;
+        init_info.MinImageCount = ImGuiInternal::swapChainImageCount;
+        init_info.ImageCount = ImGuiInternal::swapChainImageCount;
         init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
         init_info.CheckVkResultFn = Vk::Utils::CheckVkResult;
         ImGui_ImplVulkan_Init(&init_info, m_RenderPassMain);
@@ -271,10 +283,12 @@ bool ImGuiRenderer::Initialize(VulkanBaseApp* app)
 void ImGuiRenderer::Shutdown()
 {
     // >> REFACTOR
+    ENABLE_SHADOW_RENDERER(
     m_ShadowBackendImGui->Shutdown();
+    )
     // << REFACTOR
 
-    BEGIN_SkipIF_USE_SHADOW_RENDERER
+    BEGIN_Skip_IF_USE_SHADOW_RENDERER
 
     assert(m_App);
 
@@ -345,31 +359,33 @@ void ImGuiRenderer::Shutdown()
 void ImGuiRenderer::StartFrame()
 {
     // >> REFACTOR
+    ENABLE_SHADOW_RENDERER(
     m_ShadowBackendImGui->StartFrame();
+    )
     // << REFACTOR
 
-    BEGIN_SkipIF_USE_SHADOW_RENDERER
-
-    if (IsSkippingFrame())
+    BEGIN_Skip_IF_USE_SHADOW_RENDERER
     {
-        return;
+        if (IsSkippingFrame())
+        {
+            return;
+        }
+
+        ImGui::SetCurrentContext(m_ImGuiContext);
+
+        // Start the Dear ImGui frame
+        if (m_UseDefaultRenderer)
+        {
+            ImGui_ImplVulkan_NewFrame();
+        }
+
+        ImGui_ImplGlfw_NewFrame();
+
+        // Call NewFrame(), after this point you can use ImGui::* functions anytime.
+        // You should calling NewFrame() as early as you can to be able to use
+        // ImGui everywhere.
+        ImGui::NewFrame();
     }
-
-    ImGui::SetCurrentContext(m_ImGuiContext);
-
-    // Start the Dear ImGui frame
-    if (m_UseDefaultRenderer)
-    {
-        ImGui_ImplVulkan_NewFrame();
-    }
-
-    ImGui_ImplGlfw_NewFrame();
-
-    // Call NewFrame(), after this point you can use ImGui::* functions anytime.
-    // You should calling NewFrame() as early as you can to be able to use
-    // ImGui everywhere.
-    ImGui::NewFrame();
-
     END_SkipIF_USE_SHADOW_RENDERER
 
     // SRS - Set initial position of default Debug window (note: Debug window sets its own initial size, use ImGuiSetCond_Always to override)
@@ -463,10 +479,12 @@ void ImGuiRenderer::StartFrame()
 void ImGuiRenderer::EndFrame(uint32_t frameIndex, uint32_t imageIndex)
 {
     // >> REFACTOR
+    ENABLE_SHADOW_RENDERER(
     m_ShadowBackendImGui->EndFrame(frameIndex, imageIndex);
+    )
     // << REFACTOR
 
-    BEGIN_SkipIF_USE_SHADOW_RENDERER
+    BEGIN_Skip_IF_USE_SHADOW_RENDERER
 
     // You want to try calling EndFrame/Render as late as you can.
     ImGui::EndFrame();
@@ -508,9 +526,11 @@ void ImGuiRenderer::OnRecreateSwapchain(const Vk::SwapChain& swapChain)
 {
     assert(m_App);
 
+    ENABLE_SHADOW_RENDERER(
     m_ShadowBackendImGui->OnRecreateSwapchain(swapChain);
+    )
 
-    BEGIN_SkipIF_USE_SHADOW_RENDERER
+    BEGIN_Skip_IF_USE_SHADOW_RENDERER
 
     const VkDevice device = ImGuiInternal::device;
     const uint32_t imageCount = m_App->GetSwapChainImageCount();
@@ -569,7 +589,6 @@ void ImGuiRenderer::InitializePlatformCallbacks()
 
 void ImGuiRenderer::InitializeRendererCallbacks()
 {
-    //TOOD: Implement: OnCreateWindow / OnDestroyWindow / OnSetWindowSize
     ImGuiPlatformIO& platform_io = ImGui::GetPlatformIO();
 
     platform_io.Renderer_CreateWindow = ImGuiInternal::Renderer_CreateWindow;
@@ -581,19 +600,11 @@ void ImGuiRenderer::InitializeRendererCallbacks()
         platform_io.Renderer_RenderWindow = ImGuiInternal::Renderer_RenderWindow;
         platform_io.Renderer_SwapBuffers = ImGuiInternal::Renderer_SwapBuffers;
     }
-
-    /*
-    platform_io.Renderer_CreateWindow  = __ImGUIRendererCreateWindowCallback;
-    platform_io.Renderer_DestroyWindow = __ImGUIPlatformDestroyWindowCallback;
-    platform_io.Renderer_RenderWindow  = __ImGUIPlatformRenderWindowCallback;
-    platform_io.Renderer_SetWindowSize = __ImGUIPlatformSetWindowSizeCallback;
-    platform_io.Renderer_SwapBuffers   = __ImGUIPlatformSwapBuffersCallback;
-    */
 }
 
 void ImGuiRenderer::CreateFontsTexture()
 {
-    BEGIN_SkipIF_USE_SHADOW_RENDERER
+    BEGIN_Skip_IF_USE_SHADOW_RENDERER
 
     assert(m_App);
 
@@ -1519,9 +1530,6 @@ namespace ImGuiInternal
 
     void CreateOrResizeWindow(VulkanWindow* wd, uint32_t w, uint32_t h)
     {
-        VulkanBaseApp* app = (VulkanBaseApp*)ImGui::GetIO().BackendRendererUserData;
-        assert(app);
-
         const VkDevice device = ImGuiInternal::device;
         const VkPhysicalDevice physicalDevice = ImGuiInternal::physicalDevice;
 
@@ -1553,20 +1561,15 @@ namespace ImGuiInternal
 
     static void Renderer_CreateWindow(ImGuiViewport* viewport)
     {
-        VulkanBaseApp* app = (VulkanBaseApp*)ImGui::GetIO().BackendRendererUserData;
-        assert(app);
-
         const VkInstance instance = ImGuiInternal::instance;
         const VkDevice device = ImGuiInternal::device;
         const VkPhysicalDevice physicalDevice = ImGuiInternal::physicalDevice;
         const VkQueue graphicsQueue = ImGuiInternal::graphicsQueue;
-        const uint32_t queueFamily = app->GetQueueFamilyIndices().graphicsFamily.value();
-        const uint32_t imageCount = app->GetSwapChainImageCount();
 
         VulkanViewportData* vd = IM_NEW(VulkanViewportData)();
         viewport->RendererUserData = vd;
         VulkanWindow* wd = &vd->Window;
-        wd->m_QueueFamily = queueFamily;
+        wd->m_QueueFamily = ImGuiInternal::queueFamilyIdx;
 
         // Create surface
         ImGuiPlatformIO& platform_io = ImGui::GetPlatformIO();
@@ -1581,7 +1584,7 @@ namespace ImGuiInternal
 
         // Check for WSI support
         VkBool32 res;
-        vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, queueFamily, wd->m_Surface, &res);
+        vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, ImGuiInternal::queueFamilyIdx, wd->m_Surface, &res);
         if (res != VK_TRUE)
         {
             assert(0); // Error: no WSI support on physical device
@@ -1683,9 +1686,6 @@ namespace ImGuiInternal
 
     std::optional<uint32_t> AcquireNextImage(Vk::SyncObject syncObject, ImGuiViewport* viewport)
     {
-        VulkanBaseApp* app = (VulkanBaseApp*)ImGui::GetIO().BackendRendererUserData;
-        assert(app);
-
         VulkanViewportData* vd = (VulkanViewportData*)viewport->RendererUserData;
         VulkanWindow* wd = &vd->Window;
 
@@ -1932,8 +1932,8 @@ namespace ImGuiInternal
         VulkanBaseApp* app = (VulkanBaseApp*)ImGui::GetIO().BackendRendererUserData;
         assert(app);
 
-        const VkDevice device = app->GetVkDevice();
-        const VkQueue presentQueue = app->GetPresentQueue();
+        const VkDevice device = ImGuiInternal::device;
+        const VkQueue presentQueue = ImGuiInternal::graphicsQueue;
 
         VulkanViewportData* vd = (VulkanViewportData*)viewport->RendererUserData;
         VulkanWindow* wd = &vd->Window;

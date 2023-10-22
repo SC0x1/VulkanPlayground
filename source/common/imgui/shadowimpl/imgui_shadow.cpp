@@ -10,18 +10,22 @@
 #include "common/imgui/Roboto-Regular.embed"
 
 #include "common/imgui/shadowimpl/imgui_shadow.h"
-#include "common/imgui/shadowimpl/imgui_shadow_docking_impl.h"
-#include "common/imgui/shadowimpl/imgui_shadow_impl.h"
+#include "common/imgui/shadowimpl/custom_docking_impl.h"
+#include "common/imgui/shadowimpl/custom_impl.h"
 
 ImGuiShadowVulkan* ImGuiShadowVulkan::Create(bool useDockingRenderer, bool useCustomRenderer)
 {
-    if (useDockingRenderer)
+    if (useDockingRenderer && useCustomRenderer)
     {
-        return new ImGuiShadowVulkanDockingImpl(useCustomRenderer);
+        return new ImGuiShadowVulkanCustomDockingImpl();
+    }
+    else if (useCustomRenderer)
+    {
+        return new ImGuiShadowVulkanCustomImpl();
     }
     else
     {
-        return new ImGuiShadowVulkanImpl(useCustomRenderer);
+        return new ImGuiShadowVulkan(useDockingRenderer, useCustomRenderer);
     }
 
     return nullptr;
@@ -106,20 +110,30 @@ void ImGuiShadowVulkan::Initialize(const ImGuiVulkanInitInfo& initInfo)
     CreateCommandPool();
     CreateCommandBuffers(m_InitInfo.swapChainImageCount);
 
+    if (initInfo.descriptorPool == VK_NULL_HANDLE)
+    {
+        CreateDescriptorPool();
+        m_InitInfo.descriptorPool = m_DescriptorPool;
+        m_IsDescriptorPoolCreated = true;
+    }
+
+    if (initInfo.renderPassMain == VK_NULL_HANDLE)
+    {
+        ImGuiUtils::CreateRenderPass(m_InitInfo.device, m_InitInfo.swapchainImageFormat,
+            VK_ATTACHMENT_LOAD_OP_LOAD, m_InitInfo.renderPassMain);
+
+        m_IsRenderPassMainCreated = true;
+    }
+
+    // Initializes ImGui for GLFW
+    ImGui_ImplGlfw_InitForVulkan((GLFWwindow*)initInfo.windowHandle, true);
+
     if (m_UseCustomRenderer)
     {
         //CreateCommandBuffers();
     }
     else // ImGui Default Renderer API
     {
-        CreateDescriptorPool();
-
-        CreateRenderPass(m_RenderPassMain, m_InitInfo.swapchainImageFormat,
-            VK_ATTACHMENT_LOAD_OP_LOAD);
-
-        // Initializes ImGui for GLFW
-        ImGui_ImplGlfw_InitForVulkan((GLFWwindow*)initInfo.windowHandle, true);
-
         // Initializes ImGui for Vulkan
         ImGui_ImplVulkan_InitInfo init_info = {};
         init_info.Instance = m_InitInfo.instance;
@@ -127,8 +141,8 @@ void ImGuiShadowVulkan::Initialize(const ImGuiVulkanInitInfo& initInfo)
         init_info.Device = m_InitInfo.device;
         init_info.QueueFamily = m_InitInfo.queueFamily;
         init_info.Queue = m_InitInfo.graphicsQueue;
-        init_info.PipelineCache = nullptr; // TODO: PipelineCache
-        init_info.DescriptorPool = m_DescriptorPool;
+        init_info.PipelineCache = m_InitInfo.pipelineCache; // TODO: PipelineCache
+        init_info.DescriptorPool = m_InitInfo.descriptorPool;
         init_info.Subpass = 0;
         init_info.Allocator = nullptr; // TODO: Allocator
         init_info.MinImageCount = m_InitInfo.swapChainImageCount;
@@ -136,7 +150,7 @@ void ImGuiShadowVulkan::Initialize(const ImGuiVulkanInitInfo& initInfo)
         init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
         init_info.CheckVkResultFn = Vk::Utils::CheckVkResult;
 
-        ImGui_ImplVulkan_Init(&init_info, m_RenderPassMain);
+        ImGui_ImplVulkan_Init(&init_info, m_InitInfo.renderPassMain);
     }
 
     CreateFontsTexture();
@@ -158,11 +172,13 @@ void ImGuiShadowVulkan::Shutdown()
 
         DestroyCommandPool();
 
+        DestroyDescriptorPool();
+
         vkDestroyFence(m_InitInfo.device, m_FenceQueueSync, nullptr);
 
-        if (m_RenderPassMain != VK_NULL_HANDLE)
+        if (m_IsRenderPassMainCreated)
         {
-            vkDestroyRenderPass(m_InitInfo.device, m_RenderPassMain, nullptr);
+            vkDestroyRenderPass(m_InitInfo.device, m_InitInfo.renderPassMain, nullptr);
         }
 
         if (m_UseCustomRenderer)
@@ -182,6 +198,9 @@ void ImGuiShadowVulkan::Shutdown()
         ImGui_ImplGlfw_Shutdown();
 
         ImGui::DestroyContext();
+
+        m_IsDescriptorPoolCreated = false;
+        m_IsRenderPassMainCreated = false;
 
         m_IsInitialized = false;
     }
@@ -247,9 +266,24 @@ void ImGuiShadowVulkan::EndFrame(uint32_t frameIndex, uint32_t imageIndex)
 
     ImDrawData* main_draw_data = ImGui::GetDrawData();
 
+    UpdateBuffers(main_draw_data);
+
     RecordCommandBuffer(m_CommandBuffers[frameIndex], imageIndex, main_draw_data);
 
     SubmitCommandBuffer(m_CommandBuffers[frameIndex]);
+
+#if defined VP_IMGUI_VIEWPORTS_ENABLED
+    if (m_UseCustomRenderer == false && m_UseDockingRenderer == true)
+    {
+        ImGui::SetCurrentContext(m_ImGuiContext);
+        ImGuiIO& io = ImGui::GetIO(); (void)io;
+        if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+        {
+            ImGui::UpdatePlatformWindows();
+            ImGui::RenderPlatformWindowsDefault();
+        }
+    }
+#endif // VP_IMGUI_VIEWPORTS_ENABLED
 }
 
 void ImGuiShadowVulkan::OnRecreateSwapchain(const Vk::SwapChain& swapChain)
@@ -273,9 +307,13 @@ void ImGuiShadowVulkan::OnRecreateSwapchain(const Vk::SwapChain& swapChain)
 
     DestroyCommandPool();
 
-    vkDestroyRenderPass(m_InitInfo.device, m_RenderPassMain, nullptr);
+    if (m_IsRenderPassMainCreated)
+    {
+        vkDestroyRenderPass(m_InitInfo.device, m_InitInfo.renderPassMain, nullptr);
 
-    CreateRenderPass(m_RenderPassMain, m_InitInfo.swapchainImageFormat, VK_ATTACHMENT_LOAD_OP_LOAD);
+        ImGuiUtils::CreateRenderPass(m_InitInfo.device, m_InitInfo.swapchainImageFormat,
+            VK_ATTACHMENT_LOAD_OP_LOAD, m_InitInfo.renderPassMain);
+    }
 
     CreateCommandPool();
     CreateCommandBuffers(m_InitInfo.swapChainImageCount);
@@ -286,6 +324,16 @@ void ImGuiShadowVulkan::OnRecreateSwapchain(const Vk::SwapChain& swapChain)
 bool ImGuiShadowVulkan::IsSkippingFrame() const
 {
     return m_IsSkippingFrame;
+}
+
+void ImGuiShadowVulkan::DrawFrame(ImDrawData* imDrawData, VkCommandBuffer cmdBuffer)
+{
+    //
+}
+
+void ImGuiShadowVulkan::UpdateBuffers(ImDrawData* imDrawData)
+{
+    //
 }
 
 void ImGuiShadowVulkan::CreateDescriptorPool()
@@ -317,7 +365,10 @@ void ImGuiShadowVulkan::CreateDescriptorPool()
 
 void ImGuiShadowVulkan::DestroyDescriptorPool()
 {
-    vkDestroyDescriptorPool(m_InitInfo.device, m_DescriptorPool, nullptr);
+    if (m_IsDescriptorPoolCreated)
+    {
+        vkDestroyDescriptorPool(m_InitInfo.device, m_DescriptorPool, nullptr);
+    }
 }
 
 void ImGuiShadowVulkan::CreateSyncObjects()
@@ -348,7 +399,7 @@ void ImGuiShadowVulkan::CreateFramebuffers()
     info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
     info.pNext = nullptr;
     info.flags = 0;
-    info.renderPass = m_RenderPassMain;
+    info.renderPass = m_InitInfo.renderPassMain;
     info.attachmentCount = 1;
     info.pAttachments = attachment;
     info.width = m_InitInfo.swapChainExtend.width;
@@ -378,56 +429,6 @@ void ImGuiShadowVulkan::CreateCommandBuffers(uint32_t numCommandBuffers)
     VK_CHECK(vkAllocateCommandBuffers(m_InitInfo.device, &commandBufferAllocateInfo, m_CommandBuffers.data()));
 }
 
-void ImGuiShadowVulkan::CreateRenderPass(VkRenderPass& renderPass, VkFormat format, VkAttachmentLoadOp loadOp)
-{
-    VkAttachmentDescription attachment = {};
-    attachment.format = format;
-    attachment.samples = VK_SAMPLE_COUNT_1_BIT;
-    // Need UI to be drawn on top of main
-    attachment.loadOp = loadOp;
-    attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    attachment.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    // Because this render pass is the last one, we want finalLayout to be set to
-    // VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
-    attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-
-    VkAttachmentReference color_attachment = {};
-    color_attachment.attachment = 0;
-    color_attachment.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-    VkSubpassDescription subpass = {};
-    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-    subpass.colorAttachmentCount = 1;
-    subpass.pColorAttachments = &color_attachment;
-
-    VkSubpassDependency subpassDependency = {};
-    // VK_SUBPASS_EXTERNAL to create a dependency outside the current render pass
-    subpassDependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-    subpassDependency.dstSubpass = 0;
-    // VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT - since we want the pixels to be already
-    // written to the framebuffer. We can also set our dstStageMask to this same value because
-    // our GUI will also be drawn to the same target.
-    // We're basically waiting for pixels to be written before we can write pixels ourselves.
-    subpassDependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    subpassDependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    // Wait on writes
-    subpassDependency.srcAccessMask = 0;// VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    subpassDependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-
-    VkRenderPassCreateInfo renderPassInfo = {};
-    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-    renderPassInfo.attachmentCount = 1;
-    renderPassInfo.pAttachments = &attachment;
-    renderPassInfo.subpassCount = 1;
-    renderPassInfo.pSubpasses = &subpass;
-    renderPassInfo.dependencyCount = 1;
-    renderPassInfo.pDependencies = &subpassDependency;
-
-    VK_CHECK(vkCreateRenderPass(m_InitInfo.device, &renderPassInfo, nullptr, &renderPass));
-}
-
 void ImGuiShadowVulkan::RecordCommandBuffer(VkCommandBuffer cmdBuffer, uint32_t imageIndex, ImDrawData* draw_data)
 {
     VK_CHECK(vkResetCommandBuffer(cmdBuffer, 0));
@@ -442,7 +443,7 @@ void ImGuiShadowVulkan::RecordCommandBuffer(VkCommandBuffer cmdBuffer, uint32_t 
 
     VkRenderPassBeginInfo renderPassBeginInfo = {};
     renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    renderPassBeginInfo.renderPass = m_RenderPassMain;
+    renderPassBeginInfo.renderPass = m_InitInfo.renderPassMain;
     renderPassBeginInfo.framebuffer = m_Framebuffers[imageIndex];
     renderPassBeginInfo.renderArea.extent = m_InitInfo.swapChainExtend;
     renderPassBeginInfo.renderArea.offset = { 0,0 };
@@ -457,7 +458,8 @@ void ImGuiShadowVulkan::RecordCommandBuffer(VkCommandBuffer cmdBuffer, uint32_t 
     }
     else
     {
-        // Draw Custom ImGui Frame
+        ImDrawData* imDrawData = ImGui::GetDrawData();
+        DrawFrame(imDrawData, cmdBuffer);
     }
 
     vkCmdEndRenderPass(cmdBuffer);

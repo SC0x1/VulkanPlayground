@@ -54,7 +54,7 @@ public:
     VkDevice GetVkDevice() const;
     Vk::QueueFamilyIndices GetQueueFamilyIndices() const;
     VkQueue GetVkGraphicsQueue() const;
-    VkQueue GetPresentQueue() const;
+    VkQueue GetVkPresentQueue() const;
 
     uint32_t GetSwapChainImageCount() const;
     VkRenderPass GetVkRenderPass() const;
@@ -203,7 +203,7 @@ inline Vk::QueueFamilyIndices VulkanBaseApp::GetQueueFamilyIndices() const
     return m_QueFamilyndices;
 }
 
-inline VkQueue VulkanBaseApp::GetPresentQueue() const
+inline VkQueue VulkanBaseApp::GetVkPresentQueue() const
 {
     return m_PresentQueue;
 }

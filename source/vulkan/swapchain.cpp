@@ -139,18 +139,34 @@ std::vector<VkFramebuffer> SwapChain::CreateFramebuffers(VkRenderPass renderPass
 {
     std::vector<VkFramebuffer> framebuffers(m_ImageViews.size());
 
+    VkImageView attachment[1];
+
+    VkFramebufferCreateInfo framebufferInfo{};
+    framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    framebufferInfo.pNext = nullptr;
+    framebufferInfo.flags = 0;
+    framebufferInfo.renderPass = renderPass;
+    framebufferInfo.attachmentCount = 1;
+    framebufferInfo.pAttachments = attachment;
+    framebufferInfo.width = m_Extent.width;
+    framebufferInfo.height = m_Extent.height;
+    framebufferInfo.layers = 1;
+
     for (size_t i = 0; i < m_ImageViews.size(); i++)
     {
-        VkImageView attachments[] = { m_ImageViews[i] };
+        attachment[0] = m_ImageViews[i];
+        //VkImageView attachments[] = { m_ImageViews[i] };
 
-        VkFramebufferCreateInfo framebufferInfo{};
-        framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-        framebufferInfo.renderPass = renderPass;
-        framebufferInfo.attachmentCount = 1;
-        framebufferInfo.pAttachments = attachments;
-        framebufferInfo.width = m_Extent.width;
-        framebufferInfo.height = m_Extent.height;
-        framebufferInfo.layers = 1;
+        //VkFramebufferCreateInfo framebufferInfo{};
+        //framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        //framebufferInfo.pNext = nullptr;
+        //framebufferInfo.flags = 0;
+        //framebufferInfo.renderPass = renderPass;
+        //framebufferInfo.attachmentCount = 1;
+        //framebufferInfo.pAttachments = attachments;
+        //framebufferInfo.width = m_Extent.width;
+        //framebufferInfo.height = m_Extent.height;
+        //framebufferInfo.layers = 1;
 
         VK_CHECK(vkCreateFramebuffer(m_Device, &framebufferInfo, nullptr, &framebuffers[i]));
     }

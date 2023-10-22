@@ -1,31 +1,14 @@
 #pragma once
 
-#include <common/imgui/ImGuiConfig.h>
+#include "common/imgui/shadowimpl/imgui_common.h"
 
 #include "vulkan/buffer.h"
 #include "vulkan/device.h"
 #include "vulkan/commandpool.h"
 
-struct ImGuiVulkanInitInfo
-{
-    VkInstance instance{ VK_NULL_HANDLE };
-    VkDevice device{ VK_NULL_HANDLE };
-    VkPhysicalDevice physicalDevice{ VK_NULL_HANDLE };
-    VkQueue graphicsQueue{ VK_NULL_HANDLE };
-    uint32_t queueFamily = (uint32_t)-1;
-    uint32_t swapChainImageCount = (uint32_t)-1;
-    VkFormat swapchainImageFormat{ VK_FORMAT_UNDEFINED };
-    VkRenderPass renderPass{ VK_NULL_HANDLE };
-    VkExtent2D swapChainExtend{ 0,0 };
-    std::vector<VkImageView> swapChainImageViews;
-    void* windowHandle = nullptr;
-};
-
 class ImGuiShadowVulkan
 {
 public:
-
-    static ImGuiShadowVulkan* Create(bool dockingRenderer, bool useCustomRenderer);
 
     virtual ~ImGuiShadowVulkan();
 
@@ -47,18 +30,17 @@ public:
 
     bool IsSkippingFrame() const;
 
-#if VP_IMGUI_VIEWPORTS_ENABLED
-    //virtual IImGuiRendererData* CreateData() = 0;
-    //virtual void DestroyData(IImGuiRendererData* data) = 0;
+    // Backend specific methods
+    virtual void DrawFrame(ImDrawData* imDrawData, VkCommandBuffer cmdBuffer);
+    virtual void UpdateBuffers(ImDrawData* imDrawData);
 
-    //virtual void OnCreateWindow(ImGuiViewport* vp) = 0;
-    //virtual void OnDestroyWindow(ImGuiViewport* vp) = 0;
-    //virtual void OnSetWindowSize(ImGuiViewport* vp, ImVec2 size) = 0;
-#endif // VP_IMGUI_VIEWPORTS_ENABLED
+    static ImGuiShadowVulkan* Create(bool dockingRenderer, bool useCustomRenderer);
 
 protected:
+
     ImGuiShadowVulkan(bool dockingRenderer, bool customRenderer);
 
+    // Font
     void CreateFontsTexture();
 
     void CreateDescriptorPool();
@@ -73,9 +55,6 @@ protected:
     void CreateFramebuffers();
     void CreateCommandBuffers(uint32_t swapchainImagesID);
 
-    void CreateRenderPass(VkRenderPass& renderPass, VkFormat format,
-        VkAttachmentLoadOp loadOp);
-
     void RecordCommandBuffer(VkCommandBuffer cmdBuffer, uint32_t imageIndex, ImDrawData* draw_data);
     void SubmitCommandBuffer(VkCommandBuffer cmdBuffer);
 
@@ -83,8 +62,8 @@ protected:
     ImGuiVulkanInitInfo m_InitInfo;
 
     VkDescriptorPool m_DescriptorPool{ VK_NULL_HANDLE };
-    VkRenderPass m_RenderPassMain{ VK_NULL_HANDLE };
-    VkPipeline m_PipelineMain{ VK_NULL_HANDLE };
+    //VkRenderPass m_RenderPassMain{ VK_NULL_HANDLE };
+    //VkPipeline m_PipelineMain{ VK_NULL_HANDLE };
 
     Vk::CommandPool m_CommandPool;
     std::vector<VkCommandBuffer> m_CommandBuffers;
@@ -98,6 +77,13 @@ protected:
 
     // ImGui Data
     ImGuiContext* m_ImGuiContext{ nullptr };
+
+    // Custom Renderer
+    // UI params are set via push constants
+    PushConstantsBlock m_PushConstBlock;
+
+    bool m_IsRenderPassMainCreated = false;
+    bool m_IsDescriptorPoolCreated = false;
 
     bool m_UseDockingRenderer = false;
     bool m_UseCustomRenderer = false;
