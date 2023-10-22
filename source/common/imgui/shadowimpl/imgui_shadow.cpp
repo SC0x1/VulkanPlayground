@@ -120,7 +120,7 @@ void ImGuiShadowVulkan::Initialize(const ImGuiVulkanInitInfo& initInfo)
     if (initInfo.renderPassMain == VK_NULL_HANDLE)
     {
         ImGuiUtils::CreateRenderPass(m_InitInfo.device, m_InitInfo.swapchainImageFormat,
-            VK_ATTACHMENT_LOAD_OP_LOAD, m_InitInfo.renderPassMain);
+            m_InitInfo.MSAASamples, VK_ATTACHMENT_LOAD_OP_LOAD, nullptr, m_InitInfo.renderPassMain);
 
         m_IsRenderPassMainCreated = true;
     }
@@ -312,7 +312,7 @@ void ImGuiShadowVulkan::OnRecreateSwapchain(const Vk::SwapChain& swapChain)
         vkDestroyRenderPass(m_InitInfo.device, m_InitInfo.renderPassMain, nullptr);
 
         ImGuiUtils::CreateRenderPass(m_InitInfo.device, m_InitInfo.swapchainImageFormat,
-            VK_ATTACHMENT_LOAD_OP_LOAD, m_InitInfo.renderPassMain);
+            m_InitInfo.MSAASamples, VK_ATTACHMENT_LOAD_OP_LOAD, nullptr, m_InitInfo.renderPassMain);
     }
 
     CreateCommandPool();

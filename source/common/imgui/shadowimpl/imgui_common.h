@@ -17,6 +17,7 @@ struct ImGuiVulkanInitInfo
     uint32_t queueFamily = (uint32_t)-1;
     uint32_t swapChainImageCount = (uint32_t)-1;
     VkFormat swapchainImageFormat{ VK_FORMAT_UNDEFINED };
+    VkSampleCountFlagBits MSAASamples{ VK_SAMPLE_COUNT_FLAG_BITS_MAX_ENUM };
     VkRenderPass renderPassMain{ VK_NULL_HANDLE };
     VkPipelineCache pipelineCache{ VK_NULL_HANDLE };
     VkDescriptorPool descriptorPool{ VK_NULL_HANDLE };
@@ -64,8 +65,11 @@ namespace ImGuiUtils
     void UpdateBuffers(const ImGuiVulkanInitInfo& initInfo, ImDrawData* imDrawData,
         ImGuiVulkanWindowRenderBuffers& renderBuffers);
 
-    void CreateRenderPass(VkDevice device, VkFormat format, VkAttachmentLoadOp loadOp,
-        VkRenderPass& renderPass);
+    void CreateRenderPass(VkDevice device, VkFormat format, VkSampleCountFlagBits MSAASamples,
+        VkAttachmentLoadOp loadOp, const VkAllocationCallbacks* allocator, VkRenderPass& renderPass);
+
+    void CreateRenderPass(VkDevice device, const VkAttachmentDescription& attachment,
+        const VkAllocationCallbacks* allocator, VkRenderPass& renderPass);
 
     void CreatePipeline(const ImGuiVulkanInitInfo& initInfo, VkRenderPass renderPass,
         ImGuiVulkanBackendData& data);

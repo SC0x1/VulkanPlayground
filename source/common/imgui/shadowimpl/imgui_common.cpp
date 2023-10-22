@@ -88,11 +88,12 @@ namespace ImGuiUtils
         indexBuffer.Flush();
     }
 
-    void CreateRenderPass(VkDevice device, VkFormat format, VkAttachmentLoadOp loadOp, VkRenderPass& renderPass)
+    void CreateRenderPass(VkDevice device, VkFormat format, VkSampleCountFlagBits MSAASamples,
+        VkAttachmentLoadOp loadOp, const VkAllocationCallbacks* allocator, VkRenderPass& renderPass)
     {
         VkAttachmentDescription attachment = {};
         attachment.format = format;
-        attachment.samples = VK_SAMPLE_COUNT_1_BIT;
+        attachment.samples = MSAASamples;
         // Need UI to be drawn on top of main
         attachment.loadOp = loadOp;
         attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -103,6 +104,12 @@ namespace ImGuiUtils
         // VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
         attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
+        CreateRenderPass(device, attachment, allocator, renderPass);
+    }
+
+    void CreateRenderPass(VkDevice device, const VkAttachmentDescription& attachment,
+         const VkAllocationCallbacks* allocator, VkRenderPass& renderPass)
+    {
         VkAttachmentReference color_attachment = {};
         color_attachment.attachment = 0;
         color_attachment.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
@@ -135,7 +142,7 @@ namespace ImGuiUtils
         renderPassInfo.dependencyCount = 1;
         renderPassInfo.pDependencies = &subpassDependency;
 
-        VK_CHECK(vkCreateRenderPass(device, &renderPassInfo, nullptr, &renderPass));
+        VK_CHECK(vkCreateRenderPass(device, &renderPassInfo, allocator, &renderPass));
     }
 
     void CreatePipeline(const ImGuiVulkanInitInfo& initInfo, VkRenderPass renderPass,
