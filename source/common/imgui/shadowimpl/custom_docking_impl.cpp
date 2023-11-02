@@ -16,13 +16,39 @@ namespace ImGuiDockingInternal
     {
         VulkanWindow()
         {
-            memset((void*)this, 0, sizeof(*this));
+            m_pSwapchain.reset(0);
+            m_pFramesInFlight.reset(0);
+        }
 
-            m_pSwapchain = std::make_unique<Vk::SwapChain>();
-            m_pFramesInFlight = std::make_unique<Vk::FramesInFlight>();
+        void Init()
+        {
+            if (m_pSwapchain.get() == nullptr)
+            {
+                m_pSwapchain = std::make_unique<Vk::SwapChain>();
+            }
 
-            //PresentMode = (VkPresentModeKHR)~0;     // Ensure we get an error if user doesn't set this.
+            if (m_pFramesInFlight.get() == nullptr)
+            {
+                m_pFramesInFlight = std::make_unique<Vk::FramesInFlight>();
+            }
+
             m_ClearEnable = true;
+        }
+
+        void Release()
+        {
+            //if (m_pSwapchain)
+            //{
+            //    m_pSwapchain->Destroy();
+            //}
+
+            //if (m_pFramesInFlight)
+            //{
+            //    m_pFramesInFlight->Destroy();
+            //}
+
+            m_Width = m_Height = 0;
+            m_Surface = VK_NULL_HANDLE;
         }
 
         uint32_t m_Width = 0;
@@ -49,29 +75,176 @@ namespace ImGuiDockingInternal
         uint32_t m_ImageCount = 0;
         uint32_t m_ImageIndex = 0;
 
-        bool m_ClearEnable{false};
+        bool m_ClearEnable { false };
     };
 
     // For multi-viewport support:
     // Helper structure we store in the void* RendererUserData field of each ImGuiViewport to easily retrieve our backend data.
     struct VulkanViewportData
     {
-        bool WindowOwned = false;
-        VulkanWindow Window;             // Used by secondary Viewports only
-        //VulkanWindowRenderBuffers RenderBuffers{};      // Used by all Viewports
-
-        ImGuiVulkanWindowRenderBuffers renderBuffers;
-        //Vk::Buffer m_VertexBuffer;
-        //uint32_t m_VertexCount = 0;
-
-        //Vk::Buffer m_IndexBuffer;
-        //uint32_t m_IndexCount = 0;
-
-        VulkanViewportData()
+        void Initialize()
         {
-            //memset(&RenderBuffers, 0, sizeof(RenderBuffers)); 
+            window.Init();
         }
-        ~VulkanViewportData() { }
+
+        void Release(VkDevice device, VkInstance instance)
+        {
+            assert(device != nullptr);
+
+            windowOwned = false;
+
+            renderBuffers.vertexBuffer.UnMap();
+            renderBuffers.vertexBuffer.Destroy();
+
+            renderBuffers.indexBuffer.UnMap();
+            renderBuffers.indexBuffer.Destroy();
+
+            VulkanWindow* wd = &window;
+
+            if (wd->m_CommandPool.GetVkCommandPool() != VK_NULL_HANDLE)
+            {
+                vkFreeCommandBuffers(device, wd->m_CommandPool.GetVkCommandPool(),
+                    static_cast<uint32_t>(wd->m_CommandBuffers.size()), wd->m_CommandBuffers.data());
+            }
+
+            wd->m_CommandPool.Destroy(device);
+
+            if (wd->m_pFramesInFlight.get() != nullptr)
+            {
+                wd->m_pFramesInFlight->Destroy();
+                //wd->m_pFramesInFlight.reset(0);
+            }
+
+            if (wd->m_pSwapchain.get() != nullptr)
+            {
+                wd->m_pSwapchain->Destroy();
+                //wd->m_pSwapchain.reset(0);
+            }
+
+            vkDestroySurfaceKHR(instance, wd->m_Surface, nullptr);
+            wd->m_Surface = VK_NULL_HANDLE;
+
+            if (wd->m_RenderPass)
+            {
+                vkDestroyRenderPass(device, wd->m_RenderPass, nullptr);
+                wd->m_RenderPass = VK_NULL_HANDLE;
+            }
+
+            for (uint32_t i = 0; i < window.m_Framebuffers.size(); ++i)
+            {
+                vkDestroyFramebuffer(device, window.m_Framebuffers[i], nullptr);
+                window.m_Framebuffers[i] = VK_NULL_HANDLE;
+            }
+        }
+
+        bool windowOwned = false;
+        VulkanWindow window;             // Used by secondary Viewports only
+        ImGuiVulkanWindowRenderBuffers renderBuffers;
+    };
+
+    // VulkanViewportData Object Pool
+    class ViewportDataObjectPool
+    {
+    public:
+
+        enum { POOL_SIZE = 3 };
+
+        ~ViewportDataObjectPool()
+        {
+            Shutdown();
+        }
+
+        void Initualize(VkDevice device, VkInstance instance)
+        {
+            assert(m_IsInitialized == false);
+            assert(device != VK_NULL_HANDLE);
+            assert(instance != VK_NULL_HANDLE);
+
+            m_Device = device;
+            m_Instance = instance;
+
+            m_Data = new VulkanViewportData[POOL_SIZE];
+
+            m_FirstAvailable = &m_Pool[0];
+
+            for (uint32_t i = 0; i < POOL_SIZE; ++i)
+            {
+                m_Pool[i].viewportData = &m_Data[i];
+                m_IsInUse[i] = false;
+            }
+
+            for (uint32_t i = 0; i < POOL_SIZE - 1; ++i)
+            {
+                m_Pool[i].SetNextNode(&m_Pool[i + 1]);
+            }
+            m_Pool[POOL_SIZE - 1].SetNextNode(nullptr);
+
+            m_IsInitialized = true;
+        }
+
+        void Shutdown()
+        {
+            if (m_IsInitialized)
+            {
+                for (uint32_t i = 0; i < POOL_SIZE; ++i)
+                {
+                    m_Pool[i].viewportData->Release(m_Device, m_Instance);
+                    m_IsInUse[i] = false;
+                }
+
+                m_Device = VK_NULL_HANDLE;
+                m_Instance = VK_NULL_HANDLE;
+
+                delete[] m_Data;
+                m_IsInitialized = false;
+            }
+        }
+
+        VulkanViewportData* Create()
+        {
+            assert(m_FirstAvailable != nullptr);
+            Node* newNode = m_FirstAvailable;
+            m_FirstAvailable = newNode->GetNextNode();
+            return newNode->viewportData;
+        }
+        void Destroy(VulkanViewportData* data)
+        {
+            if (data == nullptr)
+            {
+                return;
+            }
+
+            uint32_t indexToDestroy = 0;
+            for (uint32_t i = 0; i < POOL_SIZE; ++i)
+            {
+                if (&m_Data[i] == data)
+                {
+                    break;
+                }
+                indexToDestroy++;
+            }
+            m_Pool[indexToDestroy].SetNextNode(m_FirstAvailable);
+            m_FirstAvailable = &m_Pool[indexToDestroy];
+        }
+
+    protected:
+        struct Node
+        {
+            Node* GetNextNode() const { return m_Next; }
+            Node* SetNextNode(Node* next) { return m_Next = next; }
+
+            VulkanViewportData* viewportData = nullptr;
+            Node* m_Next = nullptr;
+        };
+
+        Node m_Pool[POOL_SIZE];
+        bool m_IsInUse[POOL_SIZE];
+
+        Node* m_FirstAvailable = nullptr;
+        VulkanViewportData* m_Data;
+        VkDevice m_Device = VK_NULL_HANDLE;
+        VkInstance m_Instance = VK_NULL_HANDLE;
+        bool m_IsInitialized = false;
     };
 
     static void Renderer_CreateWindow(ImGuiViewport* viewport);
@@ -82,6 +255,8 @@ namespace ImGuiDockingInternal
 
     static ImGuiVulkanInitInfo* initInfo = nullptr;
     static ImGuiVulkanBackendData* bdDocking = nullptr;
+
+    ViewportDataObjectPool viewportDataObjectPool;
 };
 
 ImGuiShadowVulkanCustomDockingImpl::ImGuiShadowVulkanCustomDockingImpl()
@@ -128,6 +303,9 @@ void ImGuiShadowVulkanCustomDockingImpl::Initialize(const ImGuiVulkanInitInfo& v
         platform_io.Renderer_RenderWindow = ImGuiDockingInternal::Renderer_RenderWindow;
         platform_io.Renderer_SwapBuffers = ImGuiDockingInternal::Renderer_SwapBuffers;
     }
+
+    // Initialize a Pool of ImGuiWindow Data
+    ImGuiDockingInternal::viewportDataObjectPool.Initualize(m_InitInfo.device, m_InitInfo.instance);
 }
 
 void ImGuiShadowVulkanCustomDockingImpl::Shutdown()
@@ -157,12 +335,28 @@ void ImGuiShadowVulkanCustomDockingImpl::Shutdown()
     vkDestroyPipelineLayout(m_InitInfo.device, m_BackendDataDocking.pipelineLayout, nullptr);
     vkDestroyDescriptorSetLayout(m_InitInfo.device, m_BackendDataDocking.descriptorSetLayout, nullptr);
 
+    m_MainWindowBuffers.vertexBuffer.UnMap();
     m_MainWindowBuffers.vertexBuffer.Destroy();
+
+    m_MainWindowBuffers.indexBuffer.UnMap();
     m_MainWindowBuffers.indexBuffer.Destroy();
+
+    if (m_RenderPassDocking)
+    {
+        vkDestroyRenderPass(m_InitInfo.device, m_RenderPassDocking, nullptr);
+    }
+
+    ImGuiDockingInternal::viewportDataObjectPool.Shutdown();
 
     // ImGui callbacks unregister
     ImGuiPlatformIO& platform_io = ImGui::GetPlatformIO();
     {
+        for (int i = 1; i < platform_io.Viewports.Size; i++)
+        {
+            ImGuiViewport* viewport = platform_io.Viewports[i];
+            viewport->RendererUserData = nullptr;
+        }
+
         platform_io.Renderer_CreateWindow = nullptr;
         platform_io.Renderer_DestroyWindow = nullptr;
         platform_io.Renderer_SetWindowSize = nullptr;
@@ -181,15 +375,6 @@ void ImGuiShadowVulkanCustomDockingImpl::StartFrame()
 void ImGuiShadowVulkanCustomDockingImpl::EndFrame(uint32_t frameIndex, uint32_t imageIndex)
 {
     ImGuiShadowVulkan::EndFrame(frameIndex, imageIndex);
-
-#if defined VP_IMGUI_VIEWPORTS_ENABLED
-    ImGuiIO& io = ImGui::GetIO(); (void)io;
-    if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
-    {
-        ImGui::UpdatePlatformWindows();
-        ImGui::RenderPlatformWindowsDefault();
-    }
-#endif // VP_IMGUI_VIEWPORTS_ENABLED
 }
 
 void ImGuiShadowVulkanCustomDockingImpl::DrawFrame(ImDrawData* imDrawData, VkCommandBuffer cmdBuffer)
@@ -326,6 +511,7 @@ namespace ImGuiDockingInternal
         attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
         ImGuiUtils::CreateRenderPass(device, attachment, nullptr, wd->m_RenderPass);
 
         for (size_t i = 0; i < wd->m_Framebuffers.size(); i++)
@@ -341,11 +527,11 @@ namespace ImGuiDockingInternal
     {
         const uint32_t imageCount = (uint32_t)wd->m_Framebuffers.size();
 
-        if (wd->m_CommandBuffers.size() > 0)
-        {
-            vkFreeCommandBuffers(device, wd->m_CommandPool.GetVkCommandPool(),
-                (uint32_t)wd->m_Framebuffers.size(), wd->m_CommandBuffers.data());
-        }
+        //if (wd->m_CommandBuffers.size() > 0)
+        //{
+        //    vkFreeCommandBuffers(device, wd->m_CommandPool.GetVkCommandPool(),
+        //        (uint32_t)wd->m_Framebuffers.size(), wd->m_CommandBuffers.data());
+        //}
         wd->m_CommandPool.Destroy(device);
 
         wd->m_CommandPool.Create(device, wd->m_QueueFamily, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
@@ -364,28 +550,15 @@ namespace ImGuiDockingInternal
 
     void CreateOrResizeWindow(VulkanWindow* wd, uint32_t w, uint32_t h)
     {
-        //////////////////////////////////////////////////////////////////////////
-        // Recreate Swapchain
         VkResult result;
         result = vkDeviceWaitIdle(initInfo->device);
         VK_CHECK(result);
 
         wd->m_ImageCount = 0;
-        //if (wd->m_RenderPass)
-        //{
-        //    vkDestroyRenderPass(device, wd->m_RenderPass, nullptr);
-        //}
 
         uint32_t windowSize[2] = { static_cast<uint32_t>(w), static_cast<uint32_t>(h) };
         wd->m_pSwapchain->Rebuild(windowSize);
 
-        // Destroy Framebuffers
-        //for (auto framebuffer : wd->m_Framebuffers)
-        //{
-        //    vkDestroyFramebuffer(device, framebuffer, nullptr);
-        //}
-
-        //RecreateSwapchain(wd, nullptr, w, h);
         CreateWindowResources(initInfo->device, wd, nullptr);
         CreateWindowCommandBuffers(initInfo->physicalDevice, initInfo->device, wd);
     }
@@ -397,9 +570,12 @@ namespace ImGuiDockingInternal
         const VkPhysicalDevice physicalDevice = initInfo->physicalDevice;
         const VkQueue graphicsQueue = initInfo->graphicsQueue;
 
-        VulkanViewportData* vd = IM_NEW(VulkanViewportData)();
+        //VulkanViewportData* vd = IM_NEW(VulkanViewportData)();
+        VulkanViewportData* vd = viewportDataObjectPool.Create();
+        vd->Initialize();
+
         viewport->RendererUserData = vd;
-        VulkanWindow* wd = &vd->Window;
+        VulkanWindow* wd = &vd->window;
         wd->m_QueueFamily = initInfo->queueFamily;
 
         // Create surface
@@ -413,7 +589,7 @@ namespace ImGuiDockingInternal
         //        m_Surface.InitSurface(m_Instance, m_Window);
         //#endif
 
-                // Check for WSI support
+        // Check for WSI support
         VkBool32 res;
         vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, initInfo->queueFamily, wd->m_Surface, &res);
         if (res != VK_TRUE)
@@ -463,52 +639,19 @@ namespace ImGuiDockingInternal
         VulkanViewportData* vd = (VulkanViewportData*)viewport->RendererUserData;
         if (vd)
         {
-            vd->renderBuffers.vertexBuffer.Destroy();
-            vd->renderBuffers.indexBuffer.Destroy();
+            //IM_DELETE(vd);
+            vd->Release(initInfo->device, initInfo->instance);
+            viewportDataObjectPool.Destroy(vd);
 
-            VulkanWindow* wd = &vd->Window;
-
-            vkFreeCommandBuffers(initInfo->device, wd->m_CommandPool.GetVkCommandPool(),
-                static_cast<uint32_t>(wd->m_CommandBuffers.size()), wd->m_CommandBuffers.data());
-
-            wd->m_CommandPool.Destroy(initInfo->device);
-
-            wd->m_pFramesInFlight->Destroy();
-            wd->m_pFramesInFlight.reset(0);
-
-            wd->m_pSwapchain->Destroy();
-            wd->m_pSwapchain.reset(0);
-
-            vkDestroySurfaceKHR(initInfo->instance, wd->m_Surface, nullptr);
-
-            if (wd->m_RenderPass)
-            {
-                vkDestroyRenderPass(initInfo->device, wd->m_RenderPass, nullptr);
-            }
-
-            for (auto frameBuffer : wd->m_Framebuffers)
-            {
-                vkDestroyFramebuffer(initInfo->device, frameBuffer, nullptr);
-            }
-
-            IM_DELETE(vd);
             viewport->RendererUserData = nullptr;
         }
     }
 
     static void Renderer_SetWindowSize(ImGuiViewport* viewport, ImVec2 size)
     {
-        //int width = 0, height = 0;
-        //while (width == 0 || height == 0)
-        //{
-        //    GLFWwindow* window = (GLFWwindow*)viewport->PlatformHandle;
-        //    // Window minimization a special case
-        //    glfwGetFramebufferSize(window, &width, &height);
-        //    glfwWaitEvents();
-        //}
-
         VulkanViewportData* vd = (VulkanViewportData*)viewport->RendererUserData;
-        VulkanWindow* wd = &vd->Window;
+        VulkanWindow* wd = &vd->window;
+
         CreateOrResizeWindow(wd,
             static_cast<uint32_t>(size.x),
             static_cast<uint32_t>(size.y));
@@ -517,7 +660,7 @@ namespace ImGuiDockingInternal
     std::optional<uint32_t> AcquireNextImage(Vk::SyncObject syncObject, ImGuiViewport* viewport)
     {
         VulkanViewportData* vd = (VulkanViewportData*)viewport->RendererUserData;
-        VulkanWindow* wd = &vd->Window;
+        VulkanWindow* wd = &vd->window;
 
         vkWaitForFences(initInfo->device, 1, &syncObject.fence, VK_TRUE, UINT64_MAX);
 
@@ -530,8 +673,7 @@ namespace ImGuiDockingInternal
             // *VK_ERROR_OUT_OF_DATE_KHR* The swap chain has become incompatible with the surface
             // and can no longer be used for rendering. Usually happens after a window resize.
             // It can be returned by The vkAcquireNextImageKHR and vkQueuePresentKHR functions.
-            //OnRecreateSwapchain();
-
+            
             CreateOrResizeWindow(wd,
                 static_cast<uint32_t>(viewport->Size.x),
                 static_cast<uint32_t>(viewport->Size.y));
@@ -555,7 +697,7 @@ namespace ImGuiDockingInternal
     static void Renderer_RenderWindow(ImGuiViewport* viewport, void* renderArg)
     {
         VulkanViewportData* vd = (VulkanViewportData*)viewport->RendererUserData;
-        VulkanWindow* wd = &vd->Window;
+        VulkanWindow* wd = &vd->window;
 
         ImDrawData* imDrawData = viewport->DrawData;
         const float fb_width = (imDrawData->DisplaySize.x * imDrawData->FramebufferScale.x);
@@ -660,21 +802,6 @@ namespace ImGuiDockingInternal
             
             vkCmdPushConstants(cmdBuffer, pipelineLayout,
                 VK_SHADER_STAGE_VERTEX_BIT, sizeof(float) * 2, sizeof(float) * 2, translate);
-
-            // Setup scale and translation:
-            // Our visible penguin space lies from draw_data->DisplayPps (top left) to
-            // draw_data->DisplayPos+data_data->DisplaySize (bottom right).
-            // DisplayPos is (0,0) for single viewport apps.
-            //{
-            //    m_PushConstBlock.scale = glm::vec2(2.0f / imDrawData->DisplaySize.x, 2.0f / imDrawData->DisplaySize.y);
-
-            //    float translate[2];
-            //    translate[0] = -1.0f - imDrawData->DisplayPos.x * m_PushConstBlock.scale[0];
-            //    translate[1] = -1.0f - imDrawData->DisplayPos.y * m_PushConstBlock.scale[1];
-            //    m_PushConstBlock.translate = glm::vec2(translate[0], translate[1]);
-
-            //    vkCmdPushConstants(cmdBuffer, m_PipelineLayoutDocking, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstantsBlock), &m_PushConstBlock);
-            //}
         }
 
         //////////////////////////////////////////////////////////////////////////
@@ -760,7 +887,7 @@ namespace ImGuiDockingInternal
         const VkQueue presentQueue = initInfo->graphicsQueue;
 
         VulkanViewportData* vd = (VulkanViewportData*)viewport->RendererUserData;
-        VulkanWindow* wd = &vd->Window;
+        VulkanWindow* wd = &vd->window;
 
         VkResult result;
         uint32_t present_index = wd->m_pFramesInFlight->GetCurrentFrameIndex();

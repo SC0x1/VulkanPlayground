@@ -29,6 +29,8 @@ void CommandPool::Destroy(VkDevice device)
     if (m_VkCommandPool)
     {
         vkDestroyCommandPool(device, m_VkCommandPool, nullptr);
+        m_VkCommandPool = VK_NULL_HANDLE;
+        m_QueueFamilyIndex = 0;
         m_IsCreated = false;
     }
 }

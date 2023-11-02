@@ -128,11 +128,7 @@ void ImGuiShadowVulkan::Initialize(const ImGuiVulkanInitInfo& initInfo)
     // Initializes ImGui for GLFW
     ImGui_ImplGlfw_InitForVulkan((GLFWwindow*)initInfo.windowHandle, true);
 
-    if (m_UseCustomRenderer)
-    {
-        //CreateCommandBuffers();
-    }
-    else // ImGui Default Renderer API
+    if (m_UseCustomRenderer == false)
     {
         // Initializes ImGui for Vulkan
         ImGui_ImplVulkan_InitInfo init_info = {};
@@ -273,10 +269,9 @@ void ImGuiShadowVulkan::EndFrame(uint32_t frameIndex, uint32_t imageIndex)
     SubmitCommandBuffer(m_CommandBuffers[frameIndex]);
 
 #if defined VP_IMGUI_VIEWPORTS_ENABLED
-    if (m_UseCustomRenderer == false && m_UseDockingRenderer == true)
+    if (m_UseDockingRenderer == true)
     {
-        ImGui::SetCurrentContext(m_ImGuiContext);
-        ImGuiIO& io = ImGui::GetIO(); (void)io;
+        const ImGuiIO& io = ImGui::GetIO();
         if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
         {
             ImGui::UpdatePlatformWindows();
@@ -409,10 +404,7 @@ void ImGuiShadowVulkan::CreateFramebuffers()
     for (uint32_t i = 0; i < m_InitInfo.swapChainImageCount; ++i)
     {
         attachment[0] = m_InitInfo.swapChainImageViews[i];
-        if (vkCreateFramebuffer(m_InitInfo.device, &info, nullptr, &m_Framebuffers[i]) != VK_SUCCESS)
-        {
-            throw std::runtime_error("Unable to create UI framebuffers!");
-        }
+        VK_CHECK(vkCreateFramebuffer(m_InitInfo.device, &info, nullptr, &m_Framebuffers[i]));
     }
 }
 

@@ -3,7 +3,7 @@
 #include "vulkan/utils.h"
 
 vkBEGIN_NAMESPACE
-    
+     
 struct Buffer
 {
     VkDevice m_Device = VK_NULL_HANDLE;

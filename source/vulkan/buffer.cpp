@@ -116,6 +116,9 @@ VkResult Buffer::Invalidate(VkDeviceSize size, VkDeviceSize offset)
 */
 void Buffer::Destroy()
 {
+    assert(m_Mapped == nullptr);
+    //assert(m_Device != nullptr);
+
     if (m_Buffer)
     {
         vkDestroyBuffer(m_Device, m_Buffer, nullptr);
@@ -127,6 +130,10 @@ void Buffer::Destroy()
         vkFreeMemory(m_Device, m_Memory, nullptr);
         m_Memory = VK_NULL_HANDLE;
     }
+
+    //m_Device = VK_NULL_HANDLE;
+    m_Size = 0;
+    m_Alignment = 0;
 }
 
 vkEND_NAMESPACE

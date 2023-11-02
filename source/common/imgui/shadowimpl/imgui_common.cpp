@@ -44,7 +44,7 @@ namespace ImGuiUtils
 
             vertexBuffer.UnMap();
             vertexBuffer.Destroy();
-
+            // TODO: refactor: proper create a buffer wrapper
             Vk::Utils::CreateBuffer(device, physicalDevice, vertexBufferSize,
                 VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
                 &vertexBuffer.m_Buffer, &vertexBuffer.m_Memory);
@@ -336,6 +336,9 @@ namespace ImGuiUtils
         pipelineCreateInfo.pVertexInputState = &vertexInputState;
 
         VK_CHECK(vkCreateGraphicsPipelines(initInfo.device, pipelineCache, 1, &pipelineCreateInfo, nullptr, &pipeline));
+
+        vkDestroyShaderModule(initInfo.device, shaderModuleFrag, nullptr);
+        vkDestroyShaderModule(initInfo.device, shaderModuleVert, nullptr);
     }
 
     void CreateFontsTextureCustom(const ImGuiVulkanInitInfo& initInfo, const VkCommandPool commandPool,
@@ -452,6 +455,7 @@ namespace ImGuiUtils
         Vk::Utils::EndSingleTimeCommands(initInfo.device, initInfo.graphicsQueue,
             commandPool, command_buffer);
 
+        stagingBuffer.UnMap();
         stagingBuffer.Destroy();
 
         // Font texture Sampler
