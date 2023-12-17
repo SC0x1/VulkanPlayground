@@ -9,7 +9,17 @@
 #include <GLFW/glfw3native.h>
 #endif // _WIN32
 
+// to include vulkan_win32.h
+//#ifndef VK_USE_PLATFORM_WIN32_KHR
+//    #define VK_USE_PLATFORM_WIN32_KHR
+//#endif
+
 #include <vulkan/vulkan.h>
+
+#ifdef _WIN32
+#include <windows.h>
+#include "vulkan/vulkan_win32.h"
+#endif
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE //  OpenGL depth range of -1.0 to 1.0 by default. Vulkan range of 0.0 to 1.0

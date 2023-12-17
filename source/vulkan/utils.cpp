@@ -6,13 +6,13 @@ vkBEGIN_NAMESPACE
 
 namespace Utils
 {
-    uint32_t FindQueueFamilies(VkPhysicalDevice device, VkQueueFlags desiredFlags)
+    uint32_t FindQueueFamilies(VkPhysicalDevice physicalDevice, VkQueueFlags desiredFlags)
     {
         // Assign index to queue families that could be found
         uint32_t queueFamilyCount = 0;
-        vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
+        vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
         std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
-        vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
+        vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilies.data());
 
         for (uint32_t i = 0; i != queueFamilies.size(); i++)
         {
@@ -26,14 +26,14 @@ namespace Utils
         return 0;
     }
 
-    QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface)
+    QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface)
     {
         QueueFamilyIndices indices;
         // Assign index to queue families that could be found
         uint32_t queueFamilyCount = 0;
-        vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
+        vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
         std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
-        vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
+        vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilies.data());
 
         int i = 0;
         for (const auto& queueFamily : queueFamilies)
@@ -44,7 +44,7 @@ namespace Utils
             }
 
             VkBool32 presentSupport = false;
-            vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
+            vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, i, surface, &presentSupport);
             if (presentSupport)
             {
                 indices.presentFamily = i;
@@ -548,6 +548,53 @@ namespace Utils
         return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT;
     }
 
+    VkResult GetAvailableExtensions(VkPhysicalDevice& physicalDevice, std::vector<VkExtensionProperties>& extensions)
+    {
+        extensions.resize(0);
+        uint32_t actualExtensionsCount = 0;
+        VK_CHECK(vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &actualExtensionsCount, nullptr));
+        extensions.resize(actualExtensionsCount);
+        VK_CHECK_RET(vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &actualExtensionsCount, extensions.data()));
+    }
+
+    bool IsExtensionAvailable(VkPhysicalDevice& physicalDevice, const char* extensionName)
+    {
+        std::vector<VkExtensionProperties> presentExtensions;
+        VkResult result = GetAvailableExtensions(physicalDevice, presentExtensions);
+        if (result == VK_SUCCESS)
+        {
+            for (auto extension : presentExtensions)
+            {
+                if (strcmp(extension.extensionName, extensionName) == 0)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    const char* GetSurfaceKHRExtensionName()
+    {
+#if defined(VK_USE_PLATFORM_WIN32_KHR)
+    return VK_KHR_WIN32_SURFACE_EXTENSION_NAME;
+#elif defined(VK_USE_PLATFORM_ANDROID_KHR)
+    return VK_KHR_ANDROID_SURFACE_EXTENSION_NAME;
+#elif defined(VK_USE_PLATFORM_DIRECTFB_EXT)
+    return VK_EXT_DIRECTFB_SURFACE_EXTENSION_NAME;
+#elif defined(VK_USE_PLATFORM_WAYLAND_KHR)
+    return VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME;
+#elif defined(VK_USE_PLATFORM_XLIB_KHR)
+    return VK_KHR_XLIB_SURFACE_EXTENSION_NAME;
+#elif defined(VK_USE_PLATFORM_XCB_KHR)
+    return VK_KHR_XCB_SURFACE_EXTENSION_NAME;
+#elif defined(VK_USE_PLATFORM_IOS_MVK)
+    return VK_MVK_IOS_SURFACE_EXTENSION_NAME;
+#elif defined(VK_USE_PLATFORM_MACOS_MVK)
+    return VK_MVK_MACOS_SURFACE_EXTENSION_NAME;
+#endif
+    }
 }
 
 vkEND_NAMESPACE

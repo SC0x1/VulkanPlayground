@@ -154,7 +154,7 @@ namespace ImGuiDockingInternal
             Shutdown();
         }
 
-        void Initualize(VkDevice device, VkInstance instance)
+        void Initialize(VkDevice device, VkInstance instance)
         {
             assert(m_IsInitialized == false);
             assert(device != VK_NULL_HANDLE);
@@ -305,7 +305,7 @@ void ImGuiShadowVulkanCustomDockingImpl::Initialize(const ImGuiVulkanInitInfo& v
     }
 
     // Initialize a Pool of ImGuiWindow Data
-    ImGuiDockingInternal::viewportDataObjectPool.Initualize(m_InitInfo.device, m_InitInfo.instance);
+    ImGuiDockingInternal::viewportDataObjectPool.Initialize(m_InitInfo.device, m_InitInfo.instance);
 }
 
 void ImGuiShadowVulkanCustomDockingImpl::Shutdown()

@@ -30,14 +30,6 @@
 
 vkBEGIN_NAMESPACE
 
-struct VulkanInstance final
-{
-    VkInstance instance;
-    VkSurfaceKHR surface;
-    VkDebugUtilsMessengerEXT messenger;
-    VkDebugReportCallbackEXT reportCallback;
-};
-
 struct VulkanRenderDevice final
 {
     uint32_t framebufferWidth;
@@ -148,6 +140,17 @@ namespace Utils
         VkImageLayout newImageLayout,
         VkPipelineStageFlags srcStageMask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         VkPipelineStageFlags dstStageMask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+
+    const char* GetSurfaceKHRExtensionName();
+
+    // Physical Device
+    std::vector<VkPhysicalDevice> EnumeratePhysicalDevices(VkInstance instance);
+
+    bool IsExtensionAvailable(VkPhysicalDevice& physicalDevice, const char* extensionName);
+
+    std::vector<VkExtensionProperties> GetAvailableExtensions(VkPhysicalDevice& physicalDevice);
+
+    std::vector<VkQueueFamilyProperties> GetQueueFamilyProperties(VkPhysicalDevice& physicalDevice);
 }
 
 namespace Init

@@ -5,6 +5,7 @@
 #include "vulkan/framesinflight.h"
 #include "vulkan/swapchain.h"
 #include "vulkan/surface.h"
+#include "vulkan/instance.h"
 
 #include "common/imgui/ImGUIVulkan.h"
 
@@ -88,11 +89,11 @@ protected:
     void CreateColorResources(); // MSAA image
     void CreateDepthResources(); // Depth image
 
-    bool CheckValidationLayerSupport() const;
+    //bool CheckValidationLayerSupport() const;
 
     bool CheckDeviceExtensionSupport(VkPhysicalDevice device) const;
 
-    std::vector<const char*> GetRequiredExtensions() const;
+    //std::vector<const char*> GetRequiredExtensions() const;
 
     std::optional<uint32_t> AcquireNextImage(Vk::SyncObject syncObject);
 
@@ -122,13 +123,13 @@ protected:
 
     GLFWwindow* m_Window = nullptr;
 
-    VkInstance m_Instance;
+    //VkInstance m_Instance;
 
-    VkDebugUtilsMessengerEXT m_DebugMessenger;
+    //VkDebugUtilsMessengerEXT m_DebugMessenger;
 
     VkPhysicalDevice m_PhysicalDevice = VK_NULL_HANDLE; // A Physical device
     VkDevice m_Device;                                  // A Logical device
-    Vk::QueueFamilyIndices m_QueFamilyndices;
+    Vk::QueueFamilyIndices m_QueueFamilyndices;
     VkQueue m_GraphicsQueue;                            // Device queues are implicitly cleaned up when the device is destroyed
     VkQueue m_PresentQueue;
 
@@ -158,6 +159,8 @@ protected:
 
     Vk::FramesInFlight m_FramesInFlight;
 
+    Vk::Instance m_Instance;
+
     //std::vector<VkFence> m_ImagesInFlight;
 
     const std::vector<const char*> m_ValidationLayers =
@@ -185,7 +188,7 @@ protected:
 
 inline VkInstance VulkanBaseApp::GetVkInstance() const
 {
-    return m_Instance;
+    return m_Instance.GetVkInstance();
 }
 
 inline VkPhysicalDevice VulkanBaseApp::GetVkPhysicalDevice() const
@@ -200,7 +203,7 @@ inline VkDevice VulkanBaseApp::GetVkDevice() const
 
 inline Vk::QueueFamilyIndices VulkanBaseApp::GetQueueFamilyIndices() const
 {
-    return m_QueFamilyndices;
+    return m_QueueFamilyndices;
 }
 
 inline VkQueue VulkanBaseApp::GetVkPresentQueue() const
